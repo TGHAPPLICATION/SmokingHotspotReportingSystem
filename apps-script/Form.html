@@ -321,44 +321,23 @@ function geocodeAddress() {
   btn.disabled = true;
   btn.textContent = '查詢中…';
 
-  // 使用 Photon API，加上台北市中心座標偏好，優先回傳附近結果
-  var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(addr)
-    + '&lat=25.0330&lon=121.5654&limit=5';
-
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+  // 透過 Apps Script 後端呼叫 Google Maps Geocoding（不需 API Key）
+  google.script.run
+    .withSuccessHandler(function(result) {
       btn.textContent = '查詢地址座標';
       btn.disabled = false;
-
-      if (!data || !data.features || data.features.length === 0) {
-        showMsg('找不到此地址，請嘗試更詳細的地址（例如加上區名）。', 'error');
+      if (!result || !result.success) {
+        showMsg('找不到此地址，請嘗試更詳細的地址。', 'error');
         return;
       }
-
-      // 從回傳結果中取第一個落在台北市範圍內的點
-      var found = null;
-      for (var i = 0; i < data.features.length; i++) {
-        var c = data.features[i].geometry.coordinates;
-        var lng = c[0], lat = c[1];
-        if (lat >= 24.9 && lat <= 25.3 && lng >= 121.4 && lng <= 121.7) {
-          found = { lat: lat, lng: lng };
-          break;
-        }
-      }
-
-      if (!found) {
-        showMsg('查詢結果不在台北市範圍內，請確認地址或加上「台北市」。', 'error');
-        return;
-      }
-
-      setLocation(found.lat, found.lng, 'manual');
+      setLocation(result.lat, result.lng, 'manual');
     })
-    .catch(function() {
+    .withFailureHandler(function() {
       btn.textContent = '查詢地址座標';
       btn.disabled = false;
-      showMsg('地址查詢失敗，請確認網路連線或手動輸入更精確的地址。', 'error');
-    });
+      showMsg('地址查詢失敗，請稍後再試。', 'error');
+    })
+    .geocodeAddressServer(addr);
 }
 
 // ── 設定位置 & 地圖預覽 ───────────────────────────────────────

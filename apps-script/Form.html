@@ -321,8 +321,9 @@ function geocodeAddress() {
   btn.disabled = true;
   btn.textContent = '查詢中…';
 
-  var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q='
-    + encodeURIComponent(addr);
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw'
+    + '&viewbox=121.40,24.95,121.70,25.30&bounded=1'
+    + '&q=' + encodeURIComponent(addr);
 
   fetch(url, { headers: { 'Accept-Language': 'zh-TW' } })
     .then(function(r) { return r.json(); })

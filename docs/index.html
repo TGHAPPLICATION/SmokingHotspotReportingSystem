@@ -52,9 +52,7 @@
     margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;
     font-size: .68rem; color: #8b949e; display: flex; align-items: center; gap: 4px;
   }
-  .data-source-badge .dot {
-    width: 6px; height: 6px; border-radius: 50%; background: #8b949e; flex-shrink: 0;
-  }
+  .data-source-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #8b949e; flex-shrink: 0; }
   .data-source-badge.live .dot { background: #2ecc71; }
   .data-source-badge.mock .dot { background: #f1c40f; }
   .data-source-badge.err  .dot { background: #e74c3c; }
@@ -132,6 +130,19 @@
     border-top-color: #e74c3c; border-radius: 50%; animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 點位脂衝動畫 CSS */
+  @keyframes ripple {
+    0%   { transform: scale(1);   opacity: 0.6; }
+    100% { transform: scale(2.8); opacity: 0; }
+  }
+  .maplibregl-marker-ripple {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: rgba(231,76,60,0.5);
+    animation: ripple 1.6s ease-out infinite;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
@@ -181,6 +192,12 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oi
 var MOCK_URL = './api-mock.json';
 var TAIPEI_CENTER = [121.5654, 25.0330];
 var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
+/* 時段對應點位顏色（高對比，避開地圖底圖相近色系）*/
+var SLOT_COLORS = [
+  '#60a5fa','#818cf8','#a78bfa','#34d399',
+  '#4ade80','#facc15','#fb923c','#f87171',
+  '#ef4444','#dc2626','#7c3aed','#2563eb'
+];
 
 var allFeatures = [];
 var currentSlot = 'all';
@@ -204,28 +221,40 @@ map.on('load', function() {
 
 function initLayers() {
   map.addSource('reports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+  /* 脂衝外圈（白色半透明） */
   map.addLayer({
-    id: 'reports-pulse', type: 'circle', source: 'reports',
+    id: 'reports-halo', type: 'circle', source: 'reports',
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 12, 14, 22, 18, 30],
-      'circle-color': '#e74c3c', 'circle-opacity': 0,
-      'circle-stroke-width': 2, 'circle-stroke-color': '#e74c3c',
-      'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.3, 14, 0.15]
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 14, 14, 26, 18, 38],
+      'circle-color': '#ffffff',
+      'circle-opacity': 0.18,
+      'circle-stroke-width': 0
     }
   });
+
+  /* 主點位圓（固定點位顏色，不依時段游變） */
   map.addLayer({
     id: 'reports-circle', type: 'circle', source: 'reports',
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 14, 14, 18, 22],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 8, 14, 16, 18, 24],
       'circle-color': [
-        'interpolate', ['linear'],
-        ['coalesce', ['to-number', ['get', 'time_slot']], 0],
-        0, '#3498db', 3, '#2ecc71', 6, '#f1c40f', 9, '#e67e22', 11, '#e74c3c'
+        'match', ['%', ['coalesce', ['to-number', ['get', 'time_slot']], 0], 12],
+        0,  SLOT_COLORS[0],  1,  SLOT_COLORS[1],
+        2,  SLOT_COLORS[2],  3,  SLOT_COLORS[3],
+        4,  SLOT_COLORS[4],  5,  SLOT_COLORS[5],
+        6,  SLOT_COLORS[6],  7,  SLOT_COLORS[7],
+        8,  SLOT_COLORS[8],  9,  SLOT_COLORS[9],
+        10, SLOT_COLORS[10], 11, SLOT_COLORS[11],
+        '#e74c3c'
       ],
-      'circle-opacity': .85, 'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#fff', 'circle-stroke-opacity': .6, 'circle-blur': .1
+      'circle-opacity': 0.92,
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#ffffff',
+      'circle-stroke-opacity': 0.9
     }
   });
+
   map.on('mouseenter', 'reports-circle', function() { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'reports-circle', function() { map.getCanvas().style.cursor = ''; });
   map.on('click', 'reports-circle', function(e) {
@@ -233,12 +262,12 @@ function initLayers() {
     var coords = e.features[0].geometry.coordinates.slice();
     var slot = parseInt(props.time_slot) || 0;
     var ts = props.timestamp ? new Date(props.timestamp).toLocaleString('zh-TW') : '';
-    new maplibregl.Popup({ offset: 12, maxWidth: '240px' })
+    new maplibregl.Popup({ offset: 14, maxWidth: '240px' })
       .setLngLat(coords)
       .setHTML(
         '<div class="popup-slot">⏱ ' + SLOT_LABELS[slot] + '</div>' +
         (props.address_input ? '<div class="popup-addr">📍 ' + esc(props.address_input) + '</div>' : '') +
-        (props.description ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
+        (props.description   ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
         (ts ? '<div class="popup-time">🕐 ' + ts + '</div>' : '')
       ).addTo(map);
   });
@@ -264,6 +293,18 @@ function setDataSource(type, text) {
   document.getElementById('data-source-text').textContent = text;
 }
 
+/* 載入後自動飛至點位範圍 */
+function fitToFeatures(features) {
+  if (!features || features.length === 0) return;
+  if (features.length === 1) {
+    map.flyTo({ center: features[0].geometry.coordinates, zoom: 15, duration: 1200 });
+    return;
+  }
+  var bounds = new maplibregl.LngLatBounds();
+  features.forEach(function(f) { bounds.extend(f.geometry.coordinates); });
+  map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 1200 });
+}
+
 function loadData() {
   document.getElementById('loading').classList.remove('hidden');
   setDataSource('', '載入中…');
@@ -274,18 +315,17 @@ function loadData() {
       return r.text();
     })
     .then(function(text) {
-      console.log('[API] 回小內容前 200 字元：', text.substring(0, 200));
       var geojson = JSON.parse(text);
-      if (!geojson.features) throw new Error('缺少 features 欄位');
+      if (!geojson.features) throw new Error('缺少 features');
       allFeatures = normalizeFeatures(geojson.features);
       setDataSource('live', '即時資料 • ' + allFeatures.length + ' 筆');
       buildSlotButtons();
       filterAndRender(currentSlot);
       document.getElementById('loading').classList.add('hidden');
+      fitToFeatures(allFeatures);
     })
     .catch(function(err) {
-      console.warn('[API] 失敗，改用示範資料：', err.message);
-      setDataSource('err', 'API 失敗：' + err.message);
+      console.warn('[API] 失敗：', err.message);
       fetch(MOCK_URL)
         .then(function(r) { return r.json(); })
         .then(function(geojson) {
@@ -294,6 +334,7 @@ function loadData() {
           buildSlotButtons();
           filterAndRender(currentSlot);
           document.getElementById('loading').classList.add('hidden');
+          fitToFeatures(allFeatures);
         });
     });
 }
@@ -317,7 +358,9 @@ function buildSlotButtons() {
     var hasData = slotCounts[i] > 0;
     btn.className = 'slot-btn' + (currentSlot === String(i) ? ' active' : '') + (hasData ? ' has-data' : '');
     btn.dataset.slot = String(i);
-    btn.innerHTML = label + '<span class="slot-count">' + (hasData ? slotCounts[i] : '–') + '</span>';
+    /* 有資料的時段顯示對應顏色小圓點 */
+    var dot = hasData ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + SLOT_COLORS[i] + ';margin-bottom:2px;"></span><br>' : '';
+    btn.innerHTML = dot + label + '<span class="slot-count">' + (hasData ? slotCounts[i] : '–') + '</span>';
     btn.onclick = function() { selectSlot(String(i)); };
     grid.appendChild(btn);
   });
@@ -364,7 +407,6 @@ document.getElementById('locate-btn').addEventListener('click', function() {
 });
 
 document.getElementById('refresh-btn').addEventListener('click', loadData);
-
 document.getElementById('report-link').href = API_URL;
 </script>
 </body>

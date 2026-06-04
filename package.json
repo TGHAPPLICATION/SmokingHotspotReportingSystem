@@ -1,0 +1,12 @@
+{
+  "name": "smoking-hotspot-reporting-system",
+  "version": "1.0.0",
+  "description": "台北市吸菸熱點通報與統計地圖系統",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node tests/unit/logic.test.js",
+    "test:integration": "node tests/integration/api.test.js"
+  },
+  "keywords": ["taipei", "smoking", "hotspot", "maps", "apps-script"],
+  "license": "MIT"
+}

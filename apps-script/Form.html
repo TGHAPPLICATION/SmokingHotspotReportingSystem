@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>吸菸熱點通報</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.12);
+    width: 100%;
+    max-width: 420px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: #fff;
+    padding: 24px 20px 20px;
+  }
+  .card-header h1 { font-size: 1.3rem; font-weight: 700; }
+  .card-header p  { font-size: .85rem; opacity: .85; margin-top: 4px; }
+
+  .card-body { padding: 20px; }
+
+  /* 位置區塊 */
+  .location-block { margin-bottom: 20px; }
+  .location-block label {
+    display: block;
+    font-size: .8rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+
+  .gps-btn {
+    width: 100%;
+    padding: 14px;
+    border: 2px dashed #e74c3c;
+    border-radius: 12px;
+    background: #fff5f5;
+    color: #e74c3c;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .gps-btn:hover { background: #ffe0e0; }
+  .gps-btn.success { border-color: #27ae60; color: #27ae60; background: #f0fff4; }
+  .gps-btn.loading { opacity: .7; cursor: not-allowed; }
+
+  .divider {
+    text-align: center;
+    color: #aaa;
+    font-size: .8rem;
+    margin: 12px 0;
+    position: relative;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 42%;
+    height: 1px;
+    background: #e0e0e0;
+  }
+  .divider::before { left: 0; }
+  .divider::after  { right: 0; }
+
+  .address-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: .95rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .address-input:focus { border-color: #e74c3c; }
+
+  .geocode-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: .9rem;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .geocode-btn:hover { background: #c0392b; }
+  .geocode-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+  #map-preview {
+    width: 100%;
+    height: 180px;
+    border-radius: 12px;
+    margin-top: 12px;
+    display: none;
+    border: 1.5px solid #e0e0e0;
+  }
+
+  /* 補充說明 */
+  .desc-area {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: .95rem;
+    resize: vertical;
+    min-height: 80px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color .2s;
+  }
+  .desc-area:focus { border-color: #e74c3c; }
+
+  .char-count { text-align: right; font-size: .75rem; color: #aaa; margin-top: 4px; }
+
+  /* 時段顯示 */
+  .timeslot-badge {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: .85rem;
+    color: #856404;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* 送出按鈕 */
+  .submit-btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    box-shadow: 0 4px 12px rgba(231,76,60,.35);
+  }
+  .submit-btn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+  .submit-btn:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
+
+  /* 狀態訊息 */
+  .status-msg {
+    margin-top: 14px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: .9rem;
+    display: none;
+  }
+  .status-msg.success { background: #d4edda; color: #155724; }
+  .status-msg.error   { background: #f8d7da; color: #721c24; }
+
+  .section-title {
+    font-size: .8rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 8px;
+  }
+  .mb-16 { margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <h1>🚭 吸菸熱點通報</h1>
+    <p>協助記錄台北市吸菸熱點，建立更健康的環境</p>
+  </div>
+
+  <div class="card-body">
+
+    <!-- 目前時段 -->
+    <div class="timeslot-badge">
+      🕐 通報時段：<strong id="slot-label">計算中…</strong>
+    </div>
+
+    <!-- 位置 -->
+    <div class="location-block">
+      <div class="section-title">通報位置 *</div>
+
+      <button class="gps-btn" id="gps-btn" onclick="getGPS()">
+        <span id="gps-icon">📍</span>
+        <span id="gps-text">取得 GPS 定位</span>
+      </button>
+
+      <div class="divider">或手動輸入地址</div>
+
+      <input class="address-input" id="address-input"
+        type="text" placeholder="例：台北市信義區市府路45號"
+        oninput="onAddressInput()">
+      <button class="geocode-btn" id="geocode-btn" onclick="geocodeAddress()" disabled>
+        查詢地址座標
+      </button>
+    </div>
+
+    <div id="map-preview"></div>
+
+    <!-- 補充說明 -->
+    <div class="mb-16" style="margin-top: 16px;">
+      <div class="section-title">補充說明（選填）</div>
+      <textarea class="desc-area" id="description" maxlength="100"
+        placeholder="例：騎樓下、公園入口附近…"
+        oninput="updateCharCount()"></textarea>
+      <div class="char-count"><span id="char-count">0</span> / 100</div>
+    </div>
+
+    <!-- 送出 -->
+    <button class="submit-btn" id="submit-btn" onclick="submitReport()" disabled>
+      送出通報
+    </button>
+
+    <div class="status-msg" id="status-msg"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── 狀態 ─────────────────────────────────────────────────────
+var state = {
+  lat: null,
+  lng: null,
+  locationSource: null,
+  timeSlot: null,
+  map: null,
+  marker: null
+};
+
+// ── 初始化 ────────────────────────────────────────────────────
+(function init() {
+  updateSlotLabel();
+  setInterval(updateSlotLabel, 60000);
+})();
+
+function updateSlotLabel() {
+  var h = new Date().getHours();
+  var slot = Math.floor(h / 2);
+  state.timeSlot = slot;
+  var start = slot * 2;
+  var end = start + 2;
+  var pad = function(n) { return n < 10 ? '0' + n : n; };
+  document.getElementById('slot-label').textContent =
+    '第 ' + slot + ' 時段（' + pad(start) + ':00–' + pad(end) + ':00）';
+}
+
+// ── GPS 定位 ──────────────────────────────────────────────────
+function getGPS() {
+  if (!navigator.geolocation) {
+    showMsg('您的瀏覽器不支援 GPS 定位，請手動輸入地址。', 'error');
+    return;
+  }
+  setGPSBtnState('loading', '定位中…');
+  navigator.geolocation.getCurrentPosition(
+    function(pos) {
+      setLocation(pos.coords.latitude, pos.coords.longitude, 'gps');
+      setGPSBtnState('success', '✓ 已取得 GPS 定位');
+    },
+    function(err) {
+      setGPSBtnState('', '重新取得 GPS 定位');
+      var msgs = {
+        1: 'GPS 授權被拒絕，請在瀏覽器設定中允許定位，或手動輸入地址。',
+        2: '無法取得 GPS 訊號，請手動輸入地址。',
+        3: 'GPS 定位逾時，請手動輸入地址。'
+      };
+      showMsg(msgs[err.code] || 'GPS 定位失敗，請手動輸入地址。', 'error');
+    },
+    { timeout: 10000, maximumAge: 0, enableHighAccuracy: true }
+  );
+}
+
+function setGPSBtnState(cls, text) {
+  var btn = document.getElementById('gps-btn');
+  btn.className = 'gps-btn' + (cls ? ' ' + cls : '');
+  btn.disabled = cls === 'loading';
+  document.getElementById('gps-text').textContent = text;
+}
+
+// ── 地址地理編碼 ──────────────────────────────────────────────
+function onAddressInput() {
+  var val = document.getElementById('address-input').value.trim();
+  document.getElementById('geocode-btn').disabled = val.length < 3;
+}
+
+function geocodeAddress() {
+  var addr = document.getElementById('address-input').value.trim();
+  if (!addr) return;
+
+  var btn = document.getElementById('geocode-btn');
+  btn.disabled = true;
+  btn.textContent = '查詢中…';
+
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q='
+    + encodeURIComponent(addr);
+
+  fetch(url, { headers: { 'Accept-Language': 'zh-TW' } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.textContent = '查詢地址座標';
+      btn.disabled = false;
+      if (!data || data.length === 0) {
+        showMsg('找不到此地址，請嘗試更詳細的地址。', 'error');
+        return;
+      }
+      setLocation(parseFloat(data[0].lat), parseFloat(data[0].lon), 'manual');
+    })
+    .catch(function() {
+      btn.textContent = '查詢地址座標';
+      btn.disabled = false;
+      showMsg('地址查詢失敗，請確認網路連線或手動輸入更精確的地址。', 'error');
+    });
+}
+
+// ── 設定位置 & 地圖預覽 ───────────────────────────────────────
+function setLocation(lat, lng, source) {
+  state.lat = lat;
+  state.lng = lng;
+  state.locationSource = source;
+
+  document.getElementById('submit-btn').disabled = false;
+  document.getElementById('map-preview').style.display = 'block';
+
+  if (!state.map) {
+    state.map = L.map('map-preview', { zoomControl: true, attributionControl: false })
+      .setView([lat, lng], 16);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(state.map);
+    state.marker = L.marker([lat, lng]).addTo(state.map);
+  } else {
+    state.map.setView([lat, lng], 16);
+    state.marker.setLatLng([lat, lng]);
+  }
+
+  // 觸發 Leaflet resize（在隱藏元素變可見後）
+  setTimeout(function() { state.map.invalidateSize(); }, 100);
+}
+
+// ── 字數計算 ──────────────────────────────────────────────────
+function updateCharCount() {
+  var len = document.getElementById('description').value.length;
+  document.getElementById('char-count').textContent = len;
+}
+
+// ── 送出表單 ──────────────────────────────────────────────────
+function submitReport() {
+  if (!state.lat || !state.lng) {
+    showMsg('請先取得 GPS 定位或輸入地址。', 'error');
+    return;
+  }
+
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '送出中…';
+  hideMsg();
+
+  var payload = {
+    lat: state.lat,
+    lng: state.lng,
+    locationSource: state.locationSource,
+    addressInput: document.getElementById('address-input').value.trim(),
+    description: document.getElementById('description').value.trim(),
+    reporterToken: getReporterToken()
+  };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      btn.textContent = '送出通報';
+      if (result && result.success) {
+        showMsg('✅ 通報成功！感謝您協助記錄吸菸熱點。', 'success');
+        resetForm();
+      } else {
+        var errMsgs = {
+          DUPLICATE_REPORT: '您已在此時段回報過相同地點，感謝您的熱心！',
+          OUT_OF_TAIPEI_BOUNDS: '此位置不在台北市範圍內，請確認位置是否正確。',
+          INVALID_COORDINATES: '位置資料有誤，請重新定位。'
+        };
+        showMsg(errMsgs[result && result.error] || '送出失敗，請稍後再試。', 'error');
+        btn.disabled = false;
+      }
+    })
+    .withFailureHandler(function(err) {
+      btn.textContent = '送出通報';
+      btn.disabled = false;
+      showMsg('網路錯誤，請稍後再試。', 'error');
+    })
+    .processFormData(payload);
+}
+
+// Apps Script 伺服器端呼叫橋接
+// （Apps Script HTML Service 使用 google.script.run，
+//  需在 Code.gs 中加一個 processFormData function）
+</script>
+
+<script>
+// ── 工具函式 ──────────────────────────────────────────────────
+function getReporterToken() {
+  var key = 'smoking_reporter_token';
+  var token = localStorage.getItem(key);
+  if (!token) {
+    token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    localStorage.setItem(key, token);
+  }
+  return token;
+}
+
+function showMsg(text, type) {
+  var el = document.getElementById('status-msg');
+  el.textContent = text;
+  el.className = 'status-msg ' + type;
+  el.style.display = 'block';
+}
+function hideMsg() {
+  document.getElementById('status-msg').style.display = 'none';
+}
+
+function resetForm() {
+  state.lat = null;
+  state.lng = null;
+  state.locationSource = null;
+  document.getElementById('address-input').value = '';
+  document.getElementById('description').value = '';
+  document.getElementById('char-count').textContent = '0';
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('map-preview').style.display = 'none';
+  setGPSBtnState('', '取得 GPS 定位');
+  document.getElementById('geocode-btn').disabled = true;
+}
+</script>
+</body>
+</html>

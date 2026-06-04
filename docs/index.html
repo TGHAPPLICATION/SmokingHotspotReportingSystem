@@ -18,7 +18,6 @@
     flex-direction: column;
   }
 
-  /* ── 頂部 Header ── */
   .header {
     background: rgba(13,17,23,.92);
     backdrop-filter: blur(12px);
@@ -59,10 +58,8 @@
   }
   .report-btn:hover { opacity: .85; }
 
-  /* ── 地圖容器 ── */
   #map { flex: 1; position: relative; }
 
-  /* ── 統計浮框 ── */
   .stats-overlay {
     position: absolute;
     top: 14px;
@@ -90,7 +87,6 @@
     color: #f47174;
   }
 
-  /* ── 定位按鈕 ── */
   .locate-btn {
     position: absolute;
     top: 14px;
@@ -109,7 +105,6 @@
   }
   .locate-btn:hover { background: rgba(231,76,60,.3); }
 
-  /* ── 時段選擇器（底部浮動）── */
   .slot-panel {
     position: absolute;
     bottom: 0;
@@ -118,7 +113,6 @@
     z-index: 10;
     padding: 0 12px 12px;
   }
-
   .slot-panel-inner {
     background: rgba(13,17,23,.92);
     backdrop-filter: blur(16px);
@@ -126,7 +120,6 @@
     border-radius: 16px;
     padding: 12px 10px 10px;
   }
-
   .slot-header {
     display: flex;
     align-items: center;
@@ -146,13 +139,11 @@
     color: #f47174;
     font-weight: 600;
   }
-
   .slot-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 5px;
   }
-
   .slot-btn {
     background: rgba(255,255,255,.05);
     border: 1px solid #30363d;
@@ -186,7 +177,6 @@
     font-weight: 600;
   }
 
-  /* ── Popup ── */
   .maplibregl-popup-content {
     background: rgba(22,27,34,.95) !important;
     border: 1px solid #30363d !important;
@@ -213,7 +203,6 @@
   .popup-desc { color: #8b949e; font-size: .78rem; }
   .popup-time { color: #6e7681; font-size: .72rem; margin-top: 6px; }
 
-  /* ── Loading ── */
   .loading-overlay {
     position: absolute;
     inset: 0;
@@ -233,18 +222,10 @@
     animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── 脈衝動畫（CSS）── */
-  @keyframes pulse-ring {
-    0%   { transform: scale(.8); opacity: .8; }
-    70%  { transform: scale(1.6); opacity: 0; }
-    100% { transform: scale(1.6); opacity: 0; }
-  }
 </style>
 </head>
 <body>
 
-<!-- Header -->
 <div class="header">
   <div class="header-left">
     <div class="header-icon">🚭</div>
@@ -258,9 +239,7 @@
   </a>
 </div>
 
-<!-- 地圖 -->
 <div id="map">
-  <!-- 統計浮框 -->
   <div class="stats-overlay">
     <div class="stat-row">
       <span>顯示點位</span>
@@ -276,23 +255,18 @@
     </div>
   </div>
 
-  <!-- 定位按鈕 -->
   <button class="locate-btn" id="locate-btn" title="移至我的位置">📍</button>
 
-  <!-- 時段選擇面板 -->
   <div class="slot-panel">
     <div class="slot-panel-inner">
       <div class="slot-header">
         <span class="slot-header-title">⏱ 時段篩選</span>
         <span class="slot-current-label" id="slot-current-label"></span>
       </div>
-      <div class="slot-grid" id="slot-grid">
-        <!-- 由 JS 動態產生 -->
-      </div>
+      <div class="slot-grid" id="slot-grid"></div>
     </div>
   </div>
 
-  <!-- Loading -->
   <div class="loading-overlay" id="loading">
     <div class="spinner"></div>
   </div>
@@ -300,23 +274,15 @@
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
 <script>
-// ── 設定 ─────────────────────────────────────────────────────
-var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';  // ← 部署 Apps Script 後填入
+var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
 var TAIPEI_CENTER = [121.5654, 25.0330];
+var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
 
-var SLOT_LABELS = [
-  '00–02','02–04','04–06','06–08',
-  '08–10','10–12','12–14','14–16',
-  '16–18','18–20','20–22','22–24'
-];
-
-// ── 狀態 ─────────────────────────────────────────────────────
 var allFeatures = [];
 var currentSlot = 'all';
 var map;
 
-// ── 地圖初始化 ────────────────────────────────────────────────
 map = new maplibregl.Map({
   container: 'map',
   style: 'https://tiles.openfreemap.org/styles/liberty',
@@ -337,53 +303,36 @@ map.on('load', function() {
   setInterval(updateCurrentSlotLabel, 60000);
 });
 
-// ── 圖層初始化 ────────────────────────────────────────────────
 function initLayers() {
   map.addSource('reports', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-    cluster: false
+    data: { type: 'FeatureCollection', features: [] }
   });
 
-  // 脈衝外圈
   map.addLayer({
     id: 'reports-pulse',
     type: 'circle',
     source: 'reports',
     paint: {
-      'circle-radius': [
-        'interpolate', ['linear'], ['zoom'],
-        10, 12, 14, 22, 18, 30
-      ],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 12, 14, 22, 18, 30],
       'circle-color': '#e74c3c',
       'circle-opacity': 0,
       'circle-stroke-width': 2,
       'circle-stroke-color': '#e74c3c',
-      'circle-stroke-opacity': [
-        'interpolate', ['linear'], ['zoom'],
-        10, 0.3, 14, 0.15
-      ]
+      'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.3, 14, 0.15]
     }
   });
 
-  // 熱力漸變點位（主圖層）
   map.addLayer({
     id: 'reports-circle',
     type: 'circle',
     source: 'reports',
     paint: {
-      'circle-radius': [
-        'interpolate', ['linear'], ['zoom'],
-        10, 7, 14, 14, 18, 22
-      ],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 14, 14, 18, 22],
       'circle-color': [
         'interpolate', ['linear'],
-        ['get', 'time_slot'],
-        0,  '#3498db',
-        3,  '#2ecc71',
-        6,  '#f1c40f',
-        9,  '#e67e22',
-        11, '#e74c3c'
+        ['coalesce', ['to-number', ['get', 'time_slot']], 0],
+        0, '#3498db', 3, '#2ecc71', 6, '#f1c40f', 9, '#e67e22', 11, '#e74c3c'
       ],
       'circle-opacity': .85,
       'circle-stroke-width': 1.5,
@@ -393,19 +342,13 @@ function initLayers() {
     }
   });
 
-  // 滑鼠互動
-  map.on('mouseenter', 'reports-circle', function() {
-    map.getCanvas().style.cursor = 'pointer';
-  });
-  map.on('mouseleave', 'reports-circle', function() {
-    map.getCanvas().style.cursor = '';
-  });
+  map.on('mouseenter', 'reports-circle', function() { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'reports-circle', function() { map.getCanvas().style.cursor = ''; });
   map.on('click', 'reports-circle', function(e) {
     var props = e.features[0].properties;
     var coords = e.features[0].geometry.coordinates.slice();
-    var slot = parseInt(props.time_slot);
+    var slot = parseInt(props.time_slot) || 0;
     var ts = props.timestamp ? new Date(props.timestamp).toLocaleString('zh-TW') : '';
-
     new maplibregl.Popup({ offset: 12, maxWidth: '240px' })
       .setLngLat(coords)
       .setHTML(
@@ -422,26 +365,31 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── 資料載入 ──────────────────────────────────────────────────
-function loadData() {
-  var url = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL')
-    ? API_URL + '?action=getReports'
-    : MOCK_URL;
+function normalizeFeatures(features) {
+  return features.filter(function(f) {
+    var c = f.geometry && f.geometry.coordinates;
+    return c && !isNaN(c[0]) && !isNaN(c[1]);
+  }).map(function(f) {
+    f.properties.time_slot = parseInt(f.properties.time_slot) || 0;
+    return f;
+  });
+}
 
+function loadData() {
+  var url = API_URL + '?action=getReports';
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(geojson) {
-      allFeatures = geojson.features || [];
+      allFeatures = normalizeFeatures(geojson.features || []);
       buildSlotButtons();
       filterAndRender(currentSlot);
       document.getElementById('loading').classList.add('hidden');
     })
     .catch(function() {
-      // Fallback to mock
       fetch(MOCK_URL)
         .then(function(r) { return r.json(); })
         .then(function(geojson) {
-          allFeatures = geojson.features || [];
+          allFeatures = normalizeFeatures(geojson.features || []);
           buildSlotButtons();
           filterAndRender(currentSlot);
           document.getElementById('loading').classList.add('hidden');
@@ -449,31 +397,24 @@ function loadData() {
     });
 }
 
-// ── 時段按鈕建立 ──────────────────────────────────────────────
 function buildSlotButtons() {
   var slotCounts = new Array(12).fill(0);
   allFeatures.forEach(function(f) {
-    var s = parseInt(f.properties.time_slot);
+    var s = f.properties.time_slot;
     if (s >= 0 && s < 12) slotCounts[s]++;
   });
-
   var grid = document.getElementById('slot-grid');
   grid.innerHTML = '';
-
-  // 全部按鈕
   var allBtn = document.createElement('button');
   allBtn.className = 'slot-btn slot-btn-all' + (currentSlot === 'all' ? ' active' : '');
   allBtn.dataset.slot = 'all';
   allBtn.innerHTML = '全部<span class="slot-count">' + allFeatures.length + '</span>';
   allBtn.onclick = function() { selectSlot('all'); };
   grid.appendChild(allBtn);
-
   SLOT_LABELS.forEach(function(label, i) {
     var btn = document.createElement('button');
     var hasData = slotCounts[i] > 0;
-    btn.className = 'slot-btn' +
-      (currentSlot === String(i) ? ' active' : '') +
-      (hasData ? ' has-data' : '');
+    btn.className = 'slot-btn' + (currentSlot === String(i) ? ' active' : '') + (hasData ? ' has-data' : '');
     btn.dataset.slot = String(i);
     btn.innerHTML = label + '<span class="slot-count">' + (hasData ? slotCounts[i] : '–') + '</span>';
     btn.onclick = function() { selectSlot(String(i)); };
@@ -489,30 +430,19 @@ function selectSlot(slot) {
   filterAndRender(slot);
 }
 
-// ── 資料篩選與渲染 ────────────────────────────────────────────
 function filterAndRender(slot) {
   var filtered = slot === 'all'
     ? allFeatures
-    : allFeatures.filter(function(f) {
-        return String(f.properties.time_slot) === slot;
-      });
-
+    : allFeatures.filter(function(f) { return String(f.properties.time_slot) === slot; });
   if (map.getSource('reports')) {
-    map.getSource('reports').setData({
-      type: 'FeatureCollection',
-      features: filtered
-    });
+    map.getSource('reports').setData({ type: 'FeatureCollection', features: filtered });
   }
-
-  // 統計更新
   document.getElementById('stat-visible').textContent = filtered.length;
   document.getElementById('stat-total').textContent = allFeatures.length;
-
-  // 最熱時段
   if (allFeatures.length > 0) {
     var counts = new Array(12).fill(0);
     allFeatures.forEach(function(f) {
-      var s = parseInt(f.properties.time_slot);
+      var s = f.properties.time_slot;
       if (s >= 0 && s < 12) counts[s]++;
     });
     var peak = counts.indexOf(Math.max.apply(null, counts));
@@ -520,34 +450,20 @@ function filterAndRender(slot) {
   }
 }
 
-// ── 目前時段標記 ─────────────────────────────────────────────
 function updateCurrentSlotLabel() {
   var slot = Math.floor(new Date().getHours() / 2);
-  document.getElementById('slot-current-label').textContent =
-    '目前時段：' + SLOT_LABELS[slot];
+  document.getElementById('slot-current-label').textContent = '目前時段：' + SLOT_LABELS[slot];
 }
 
-// ── 定位按鈕 ─────────────────────────────────────────────────
 document.getElementById('locate-btn').addEventListener('click', function() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(function(pos) {
-    map.flyTo({
-      center: [pos.coords.longitude, pos.coords.latitude],
-      zoom: 15,
-      duration: 1000
-    });
+    map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15, duration: 1000 });
   });
 });
 
-// ── 通報連結（部署後自動填入）── ──────────────────────────────
-(function setReportLink() {
-  var link = document.getElementById('report-link');
-  if (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') {
-    link.href = API_URL;
-  } else {
-    link.href = '#';
-    link.title = '請先部署 Apps Script 並填入 API_URL';
-  }
+(function() {
+  document.getElementById('report-link').href = API_URL;
 })();
 </script>
 </body>

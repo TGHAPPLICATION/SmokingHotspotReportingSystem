@@ -7,219 +7,129 @@
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.css">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
-    background: #0d1117;
-    color: #e6edf3;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    background: #0d1117; color: #e6edf3;
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
   }
-
   .header {
-    background: rgba(13,17,23,.92);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid #30363d;
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 10;
-    flex-shrink: 0;
+    background: rgba(13,17,23,.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid #30363d; padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 10; flex-shrink: 0;
   }
   .header-left { display: flex; align-items: center; gap: 10px; }
   .header-icon {
     width: 36px; height: 36px;
     background: linear-gradient(135deg, #e74c3c, #c0392b);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem;
+    border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
   }
   .header h1 { font-size: 1rem; font-weight: 700; }
   .header p  { font-size: .72rem; color: #8b949e; margin-top: 1px; }
-
   .report-btn {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: 9px 16px;
-    font-size: .85rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: opacity .2s;
-    white-space: nowrap;
+    background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff;
+    border: none; border-radius: 10px; padding: 9px 16px;
+    font-size: .85rem; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    transition: opacity .2s; white-space: nowrap;
   }
   .report-btn:hover { opacity: .85; }
-
   #map { flex: 1; position: relative; }
-
   .stats-overlay {
-    position: absolute;
-    top: 14px;
-    left: 14px;
-    background: rgba(13,17,23,.88);
-    backdrop-filter: blur(10px);
-    border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 12px 16px;
-    min-width: 160px;
-    z-index: 5;
+    position: absolute; top: 14px; left: 14px;
+    background: rgba(13,17,23,.88); backdrop-filter: blur(10px);
+    border: 1px solid #30363d; border-radius: 12px; padding: 12px 16px;
+    min-width: 160px; z-index: 5;
   }
   .stats-overlay .stat-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: .8rem;
-    color: #8b949e;
-    margin-bottom: 4px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: .8rem; color: #8b949e; margin-bottom: 4px;
   }
   .stats-overlay .stat-row:last-child { margin-bottom: 0; }
-  .stats-overlay .stat-num {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #f47174;
+  .stats-overlay .stat-num { font-size: 1.1rem; font-weight: 700; color: #f47174; }
+  .data-source-badge {
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid #30363d;
+    font-size: .68rem; color: #8b949e; display: flex; align-items: center; gap: 4px;
   }
-
+  .data-source-badge .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #8b949e; flex-shrink: 0;
+  }
+  .data-source-badge.live .dot { background: #2ecc71; }
+  .data-source-badge.mock .dot { background: #f1c40f; }
+  .data-source-badge.err  .dot { background: #e74c3c; }
   .locate-btn {
-    position: absolute;
-    top: 14px;
-    right: 14px;
+    position: absolute; top: 14px; right: 14px;
     width: 40px; height: 40px;
-    background: rgba(13,17,23,.88);
-    backdrop-filter: blur(10px);
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    color: #e6edf3;
-    font-size: 1.1rem;
-    cursor: pointer;
-    z-index: 5;
-    display: flex; align-items: center; justify-content: center;
+    background: rgba(13,17,23,.88); backdrop-filter: blur(10px);
+    border: 1px solid #30363d; border-radius: 10px;
+    color: #e6edf3; font-size: 1.1rem; cursor: pointer;
+    z-index: 5; display: flex; align-items: center; justify-content: center;
     transition: background .2s;
   }
   .locate-btn:hover { background: rgba(231,76,60,.3); }
-
+  .refresh-btn {
+    position: absolute; top: 62px; right: 14px;
+    width: 40px; height: 40px;
+    background: rgba(13,17,23,.88); backdrop-filter: blur(10px);
+    border: 1px solid #30363d; border-radius: 10px;
+    color: #e6edf3; font-size: 1.1rem; cursor: pointer;
+    z-index: 5; display: flex; align-items: center; justify-content: center;
+    transition: background .2s;
+  }
+  .refresh-btn:hover { background: rgba(46,204,113,.2); }
   .slot-panel {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    padding: 0 12px 12px;
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 10; padding: 0 12px 12px;
   }
   .slot-panel-inner {
-    background: rgba(13,17,23,.92);
-    backdrop-filter: blur(16px);
-    border: 1px solid #30363d;
-    border-radius: 16px;
-    padding: 12px 10px 10px;
+    background: rgba(13,17,23,.92); backdrop-filter: blur(16px);
+    border: 1px solid #30363d; border-radius: 16px; padding: 12px 10px 10px;
   }
   .slot-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    padding: 0 4px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; padding: 0 4px;
   }
-  .slot-header-title {
-    font-size: .75rem;
-    font-weight: 600;
-    color: #8b949e;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-  }
-  .slot-current-label {
-    font-size: .75rem;
-    color: #f47174;
-    font-weight: 600;
-  }
-  .slot-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 5px;
-  }
+  .slot-header-title { font-size: .75rem; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; }
+  .slot-current-label { font-size: .75rem; color: #f47174; font-weight: 600; }
+  .slot-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
   .slot-btn {
-    background: rgba(255,255,255,.05);
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    color: #8b949e;
-    font-size: .68rem;
-    padding: 6px 2px;
-    cursor: pointer;
-    transition: all .15s;
-    text-align: center;
-    line-height: 1.3;
+    background: rgba(255,255,255,.05); border: 1px solid #30363d; border-radius: 8px;
+    color: #8b949e; font-size: .68rem; padding: 6px 2px; cursor: pointer;
+    transition: all .15s; text-align: center; line-height: 1.3;
   }
   .slot-btn:hover { background: rgba(231,76,60,.2); border-color: #e74c3c; color: #f47174; }
   .slot-btn.active {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-    border-color: #e74c3c;
-    color: #fff;
-    font-weight: 700;
-    box-shadow: 0 2px 8px rgba(231,76,60,.4);
+    background: linear-gradient(135deg, #e74c3c, #c0392b); border-color: #e74c3c;
+    color: #fff; font-weight: 700; box-shadow: 0 2px 8px rgba(231,76,60,.4);
   }
   .slot-btn.has-data { border-color: rgba(244,113,116,.4); }
-  .slot-btn .slot-count {
-    display: block;
-    font-size: .6rem;
-    opacity: .7;
-    margin-top: 1px;
-  }
-  .slot-btn-all {
-    grid-column: span 1;
-    font-size: .72rem;
-    font-weight: 600;
-  }
-
+  .slot-btn .slot-count { display: block; font-size: .6rem; opacity: .7; margin-top: 1px; }
+  .slot-btn-all { grid-column: span 1; font-size: .72rem; font-weight: 600; }
   .maplibregl-popup-content {
-    background: rgba(22,27,34,.95) !important;
-    border: 1px solid #30363d !important;
-    border-radius: 10px !important;
-    color: #e6edf3 !important;
+    background: rgba(22,27,34,.95) !important; border: 1px solid #30363d !important;
+    border-radius: 10px !important; color: #e6edf3 !important;
     padding: 12px 14px !important;
     font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif !important;
-    font-size: .82rem !important;
-    min-width: 180px;
+    font-size: .82rem !important; min-width: 180px;
   }
   .maplibregl-popup-tip { border-top-color: rgba(22,27,34,.95) !important; }
   .popup-slot {
-    background: rgba(231,76,60,.2);
-    border: 1px solid #e74c3c;
-    color: #f47174;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: .7rem;
-    font-weight: 600;
-    display: inline-block;
-    margin-bottom: 6px;
+    background: rgba(231,76,60,.2); border: 1px solid #e74c3c; color: #f47174;
+    border-radius: 6px; padding: 2px 8px; font-size: .7rem; font-weight: 600;
+    display: inline-block; margin-bottom: 6px;
   }
   .popup-addr { color: #e6edf3; margin-bottom: 4px; font-weight: 500; }
   .popup-desc { color: #8b949e; font-size: .78rem; }
   .popup-time { color: #6e7681; font-size: .72rem; margin-top: 6px; }
-
   .loading-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(13,17,23,.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 20;
-    backdrop-filter: blur(4px);
+    position: absolute; inset: 0; background: rgba(13,17,23,.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 20; backdrop-filter: blur(4px);
   }
   .loading-overlay.hidden { display: none; }
   .spinner {
-    width: 40px; height: 40px;
-    border: 3px solid #30363d;
-    border-top-color: #e74c3c;
-    border-radius: 50%;
-    animation: spin .8s linear infinite;
+    width: 40px; height: 40px; border: 3px solid #30363d;
+    border-top-color: #e74c3c; border-radius: 50%; animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -241,21 +151,16 @@
 
 <div id="map">
   <div class="stats-overlay">
-    <div class="stat-row">
-      <span>顯示點位</span>
-      <span class="stat-num" id="stat-visible">—</span>
-    </div>
-    <div class="stat-row">
-      <span>總回報數</span>
-      <span class="stat-num" id="stat-total">—</span>
-    </div>
-    <div class="stat-row">
-      <span>最熱時段</span>
-      <span class="stat-num" id="stat-peak">—</span>
+    <div class="stat-row"><span>顯示點位</span><span class="stat-num" id="stat-visible">—</span></div>
+    <div class="stat-row"><span>總回報數</span><span class="stat-num" id="stat-total">—</span></div>
+    <div class="stat-row"><span>最熱時段</span><span class="stat-num" id="stat-peak">—</span></div>
+    <div class="data-source-badge" id="data-source-badge">
+      <div class="dot"></div><span id="data-source-text">載入中…</span>
     </div>
   </div>
 
   <button class="locate-btn" id="locate-btn" title="移至我的位置">📍</button>
+  <button class="refresh-btn" id="refresh-btn" title="重新載入">🔄</button>
 
   <div class="slot-panel">
     <div class="slot-panel-inner">
@@ -267,9 +172,7 @@
     </div>
   </div>
 
-  <div class="loading-overlay" id="loading">
-    <div class="spinner"></div>
-  </div>
+  <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
@@ -286,13 +189,9 @@ var map;
 map = new maplibregl.Map({
   container: 'map',
   style: 'https://tiles.openfreemap.org/styles/liberty',
-  center: TAIPEI_CENTER,
-  zoom: 12,
-  minZoom: 10,
-  maxZoom: 18,
+  center: TAIPEI_CENTER, zoom: 12, minZoom: 10, maxZoom: 18,
   attributionControl: false
 });
-
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
@@ -304,29 +203,18 @@ map.on('load', function() {
 });
 
 function initLayers() {
-  map.addSource('reports', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] }
-  });
-
+  map.addSource('reports', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'reports-pulse',
-    type: 'circle',
-    source: 'reports',
+    id: 'reports-pulse', type: 'circle', source: 'reports',
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 12, 14, 22, 18, 30],
-      'circle-color': '#e74c3c',
-      'circle-opacity': 0,
-      'circle-stroke-width': 2,
-      'circle-stroke-color': '#e74c3c',
+      'circle-color': '#e74c3c', 'circle-opacity': 0,
+      'circle-stroke-width': 2, 'circle-stroke-color': '#e74c3c',
       'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.3, 14, 0.15]
     }
   });
-
   map.addLayer({
-    id: 'reports-circle',
-    type: 'circle',
-    source: 'reports',
+    id: 'reports-circle', type: 'circle', source: 'reports',
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 14, 14, 18, 22],
       'circle-color': [
@@ -334,14 +222,10 @@ function initLayers() {
         ['coalesce', ['to-number', ['get', 'time_slot']], 0],
         0, '#3498db', 3, '#2ecc71', 6, '#f1c40f', 9, '#e67e22', 11, '#e74c3c'
       ],
-      'circle-opacity': .85,
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#fff',
-      'circle-stroke-opacity': .6,
-      'circle-blur': .1
+      'circle-opacity': .85, 'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#fff', 'circle-stroke-opacity': .6, 'circle-blur': .1
     }
   });
-
   map.on('mouseenter', 'reports-circle', function() { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'reports-circle', function() { map.getCanvas().style.cursor = ''; });
   map.on('click', 'reports-circle', function(e) {
@@ -356,8 +240,7 @@ function initLayers() {
         (props.address_input ? '<div class="popup-addr">📍 ' + esc(props.address_input) + '</div>' : '') +
         (props.description ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
         (ts ? '<div class="popup-time">🕐 ' + ts + '</div>' : '')
-      )
-      .addTo(map);
+      ).addTo(map);
   });
 }
 
@@ -368,28 +251,46 @@ function esc(s) {
 function normalizeFeatures(features) {
   return features.filter(function(f) {
     var c = f.geometry && f.geometry.coordinates;
-    return c && !isNaN(c[0]) && !isNaN(c[1]);
+    return c && !isNaN(parseFloat(c[0])) && !isNaN(parseFloat(c[1]));
   }).map(function(f) {
     f.properties.time_slot = parseInt(f.properties.time_slot) || 0;
     return f;
   });
 }
 
+function setDataSource(type, text) {
+  var badge = document.getElementById('data-source-badge');
+  badge.className = 'data-source-badge ' + type;
+  document.getElementById('data-source-text').textContent = text;
+}
+
 function loadData() {
-  var url = API_URL + '?action=getReports';
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(geojson) {
-      allFeatures = normalizeFeatures(geojson.features || []);
+  document.getElementById('loading').classList.remove('hidden');
+  setDataSource('', '載入中…');
+
+  fetch(API_URL + '?action=getReports', { redirect: 'follow' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(function(text) {
+      console.log('[API] 回小內容前 200 字元：', text.substring(0, 200));
+      var geojson = JSON.parse(text);
+      if (!geojson.features) throw new Error('缺少 features 欄位');
+      allFeatures = normalizeFeatures(geojson.features);
+      setDataSource('live', '即時資料 • ' + allFeatures.length + ' 筆');
       buildSlotButtons();
       filterAndRender(currentSlot);
       document.getElementById('loading').classList.add('hidden');
     })
-    .catch(function() {
+    .catch(function(err) {
+      console.warn('[API] 失敗，改用示範資料：', err.message);
+      setDataSource('err', 'API 失敗：' + err.message);
       fetch(MOCK_URL)
         .then(function(r) { return r.json(); })
         .then(function(geojson) {
           allFeatures = normalizeFeatures(geojson.features || []);
+          setDataSource('mock', '示範資料（非真實）• ' + allFeatures.length + ' 筆');
           buildSlotButtons();
           filterAndRender(currentSlot);
           document.getElementById('loading').classList.add('hidden');
@@ -462,9 +363,9 @@ document.getElementById('locate-btn').addEventListener('click', function() {
   });
 });
 
-(function() {
-  document.getElementById('report-link').href = API_URL;
-})();
+document.getElementById('refresh-btn').addEventListener('click', loadData);
+
+document.getElementById('report-link').href = API_URL;
 </script>
 </body>
 </html>

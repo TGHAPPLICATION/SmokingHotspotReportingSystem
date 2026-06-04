@@ -378,7 +378,7 @@ function initLayers() {
       ],
       'circle-color': [
         'interpolate', ['linear'],
-        ['get', 'time_slot'],
+        ['coalesce', ['to-number', ['get', 'time_slot']], 0],
         0,  '#3498db',
         3,  '#2ecc71',
         6,  '#f1c40f',
@@ -423,6 +423,17 @@ function esc(s) {
 }
 
 // ── 資料載入 ──────────────────────────────────────────────────
+// time_slot 確保為數值，座標確保為有效數字
+function normalizeFeatures(features) {
+  return features.filter(function(f) {
+    var c = f.geometry && f.geometry.coordinates;
+    return c && !isNaN(c[0]) && !isNaN(c[1]);
+  }).map(function(f) {
+    f.properties.time_slot = parseInt(f.properties.time_slot) || 0;
+    return f;
+  });
+}
+
 function loadData() {
   var url = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL')
     ? API_URL + '?action=getReports'
@@ -431,7 +442,7 @@ function loadData() {
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(geojson) {
-      allFeatures = geojson.features || [];
+      allFeatures = normalizeFeatures(geojson.features || []);
       buildSlotButtons();
       filterAndRender(currentSlot);
       document.getElementById('loading').classList.add('hidden');
@@ -441,7 +452,7 @@ function loadData() {
       fetch(MOCK_URL)
         .then(function(r) { return r.json(); })
         .then(function(geojson) {
-          allFeatures = geojson.features || [];
+          allFeatures = normalizeFeatures(geojson.features || []);
           buildSlotButtons();
           filterAndRender(currentSlot);
           document.getElementById('loading').classList.add('hidden');

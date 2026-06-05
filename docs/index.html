@@ -7,522 +7,769 @@
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.css">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
-    background: #0d1117;
-    color: #e6edf3;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    background: #0d1117; color: #e6edf3;
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
   }
 
-  /* ── 頂部 Header ── */
+  /* ── Header ── */
   .header {
-    background: rgba(13,17,23,.92);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid #30363d;
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    z-index: 10;
-    flex-shrink: 0;
+    background: rgba(13,17,23,.95);
+    border-bottom: 1px solid #21262d;
+    padding: 0 14px;
+    height: 44px;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 10; flex-shrink: 0;
   }
-  .header-left { display: flex; align-items: center; gap: 10px; }
+  .header-left { display: flex; align-items: center; gap: 8px; }
   .header-icon {
-    width: 36px; height: 36px;
+    width: 26px; height: 26px;
     background: linear-gradient(135deg, #e74c3c, #c0392b);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem;
+    border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    font-size: .85rem; flex-shrink: 0;
   }
-  .header h1 { font-size: 1rem; font-weight: 700; }
-  .header p  { font-size: .72rem; color: #8b949e; margin-top: 1px; }
-
+  .header h1 { font-size: .88rem; font-weight: 700; }
+  .header-sub { font-size: .68rem; color: #6e7681; margin-left: 2px; }
   .report-btn {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: 9px 16px;
-    font-size: .85rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: opacity .2s;
-    white-space: nowrap;
+    background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff;
+    border: none; border-radius: 8px; padding: 6px 12px;
+    font-size: .78rem; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
+    transition: opacity .2s; white-space: nowrap; flex-shrink: 0;
   }
   .report-btn:hover { opacity: .85; }
 
-  /* ── 地圖容器 ── */
-  #map { flex: 1; position: relative; }
+  #map { flex: 1; position: relative; min-height: 0; }
 
-  /* ── 統計浮框 ── */
-  .stats-overlay {
-    position: absolute;
-    top: 14px;
-    left: 14px;
-    background: rgba(13,17,23,.88);
-    backdrop-filter: blur(10px);
+  /* ── 左側控制面板 ── */
+  .left-panel {
+    position: absolute; top: 10px; left: 10px;
+    background: rgba(13,17,23,.9);
+    backdrop-filter: blur(12px);
     border: 1px solid #30363d;
     border-radius: 12px;
-    padding: 12px 16px;
-    min-width: 160px;
     z-index: 5;
-  }
-  .stats-overlay .stat-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: .8rem;
-    color: #8b949e;
-    margin-bottom: 4px;
-  }
-  .stats-overlay .stat-row:last-child { margin-bottom: 0; }
-  .stats-overlay .stat-num {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #f47174;
+    width: 160px;
+    overflow: hidden;
   }
 
-  /* ── 定位按鈕 ── */
-  .locate-btn {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 40px; height: 40px;
-    background: rgba(13,17,23,.88);
-    backdrop-filter: blur(10px);
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    color: #e6edf3;
-    font-size: 1.1rem;
-    cursor: pointer;
-    z-index: 5;
+  /* 統計圓圈 */
+  .stat-circles {
+    padding: 12px 8px 10px;
+    display: flex;
+    gap: 4px;
+  }
+  .stat-circle {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+  }
+  .stat-ring {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; line-height: 1.1;
+    position: relative;
+  }
+  .stat-ring-visible {
+    border: 2.5px solid #60a5fa;
+    background: rgba(96,165,250,.1);
+    color: #93c5fd;
+    font-size: 1.05rem;
+  }
+  .stat-ring-total {
+    border: 2.5px solid #818cf8;
+    background: rgba(129,140,248,.1);
+    color: #a5b4fc;
+    font-size: 1.05rem;
+  }
+  .stat-ring-peak {
+    border: 2.5px solid #f47174;
+    background: rgba(244,113,116,.1);
+    color: #f47174;
+    font-size: .62rem;
+    text-align: center;
+    padding: 0 3px;
+    word-break: break-all;
+  }
+  .stat-label {
+    font-size: .58rem; color: #6e7681; text-align: center; line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  /* 資料來源徽章 */
+  .data-source-badge {
+    padding: 5px 10px; border-top: 1px solid #21262d;
+    font-size: .63rem; color: #8b949e; display: flex; align-items: center; gap: 4px;
+  }
+  .data-source-badge .dot { width: 5px; height: 5px; border-radius: 50%; background: #8b949e; flex-shrink: 0; }
+  .data-source-badge.live .dot { background: #2ecc71; }
+  .data-source-badge.mock .dot { background: #f1c40f; }
+  .data-source-badge.err  .dot { background: #e74c3c; }
+
+  /* 視圖切換 */
+  .panel-view { padding: 6px 8px; display: flex; gap: 4px; border-top: 1px solid #21262d; }
+  .view-btn {
+    flex: 1; background: rgba(255,255,255,.04); border: 1px solid #30363d;
+    border-radius: 7px; color: #8b949e; font-size: .64rem; font-weight: 600;
+    cursor: pointer; padding: 5px 2px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transition: all .15s; line-height: 1.2;
+  }
+  .view-btn .vicon { font-size: .88rem; }
+  .view-btn:hover { color: #e6edf3; border-color: #484f58; background: rgba(255,255,255,.07); }
+  .view-btn.active { color: #f47174; border-color: #e74c3c; background: rgba(231,76,60,.15); font-weight: 700; }
+
+  /* 圖例 */
+  .panel-legend { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
+  .legend-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
+  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: .68rem; color: #8b949e; }
+  .legend-row:last-child { margin-bottom: 0; }
+  .legend-swatch {
+    border-radius: 50%; flex-shrink: 0;
+    border: 1.5px solid rgba(255,255,255,.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .5rem; font-weight: 700; color: #fff;
+  }
+  .panel-legend.hidden { display: none; }
+
+  /* 月份滑桿 */
+  .month-filter { padding: 8px 10px 10px; border-top: 1px solid #21262d; }
+  .month-filter-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .month-label { font-size: .72rem; font-weight: 700; color: #e6edf3; text-align: center; margin-bottom: 5px; }
+  .month-nav { display: flex; align-items: center; gap: 5px; }
+  .month-nav-btn {
+    background: rgba(255,255,255,.06); border: 1px solid #30363d;
+    border-radius: 5px; color: #8b949e; font-size: .7rem;
+    cursor: pointer; padding: 2px 7px; transition: all .15s; flex-shrink: 0;
+  }
+  .month-nav-btn:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #e6edf3; }
+  .month-nav-btn:disabled { opacity: .3; cursor: default; }
+  .month-slider-wrap { position: relative; padding: 4px 0 2px; }
+  input[type=range].month-slider {
+    -webkit-appearance: none; width: 100%; height: 3px;
+    background: #30363d; border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range].month-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: #e74c3c; border: 2px solid #fff;
+    cursor: pointer; transition: transform .1s;
+  }
+  input[type=range].month-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .month-all-btn {
+    width: 100%; margin-top: 6px;
+    background: rgba(255,255,255,.04); border: 1px solid #30363d;
+    border-radius: 5px; color: #6e7681; font-size: .63rem;
+    cursor: pointer; padding: 4px; transition: all .15s;
+  }
+  .month-all-btn:hover { background: rgba(255,255,255,.09); color: #e6edf3; }
+  .month-all-btn.active { background: rgba(96,165,250,.12); border-color: #60a5fa; color: #60a5fa; }
+  .slot-filter { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
+  .slot-filter-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+  .slot-filter-clear { font-size: .6rem; font-weight: 400; color: #484f58; cursor: pointer; text-transform: none; letter-spacing: 0; }
+  .slot-filter-clear:hover { color: #8b949e; }
+  .slot-band {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+    font-size: .68rem; color: #8b949e; cursor: pointer;
+    padding: 2px 4px; border-radius: 4px; user-select: none;
+    transition: background .15s;
+  }
+  .slot-band:last-child { margin-bottom: 0; }
+  .slot-band:hover { background: rgba(255,255,255,.06); }
+  .slot-band.active { color: #e6edf3; background: rgba(255,255,255,.1); }
+  .slot-band.dimmed { opacity: .35; }
+  .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
+
+  /* ── 右側圖示按鈕 ── */
+  .right-btns {
+    position: absolute; top: 10px; right: 10px;
+    display: flex; flex-direction: column; gap: 6px; z-index: 5;
+  }
+  .icon-btn {
+    width: 36px; height: 36px;
+    background: rgba(13,17,23,.9); backdrop-filter: blur(10px);
+    border: 1px solid #30363d; border-radius: 9px;
+    color: #e6edf3; font-size: 1rem; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: background .2s;
   }
-  .locate-btn:hover { background: rgba(231,76,60,.3); }
-
-  /* ── 時段選擇器（底部浮動）── */
-  .slot-panel {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    padding: 0 12px 12px;
-  }
-
-  .slot-panel-inner {
-    background: rgba(13,17,23,.92);
-    backdrop-filter: blur(16px);
-    border: 1px solid #30363d;
-    border-radius: 16px;
-    padding: 12px 10px 10px;
-  }
-
-  .slot-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    padding: 0 4px;
-  }
-  .slot-header-title {
-    font-size: .75rem;
-    font-weight: 600;
-    color: #8b949e;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-  }
-  .slot-current-label {
-    font-size: .75rem;
-    color: #f47174;
-    font-weight: 600;
-  }
-
-  .slot-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 5px;
-  }
-
-  .slot-btn {
-    background: rgba(255,255,255,.05);
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    color: #8b949e;
-    font-size: .68rem;
-    padding: 6px 2px;
-    cursor: pointer;
-    transition: all .15s;
-    text-align: center;
-    line-height: 1.3;
-  }
-  .slot-btn:hover { background: rgba(231,76,60,.2); border-color: #e74c3c; color: #f47174; }
-  .slot-btn.active {
-    background: linear-gradient(135deg, #e74c3c, #c0392b);
-    border-color: #e74c3c;
-    color: #fff;
-    font-weight: 700;
-    box-shadow: 0 2px 8px rgba(231,76,60,.4);
-  }
-  .slot-btn.has-data { border-color: rgba(244,113,116,.4); }
-  .slot-btn .slot-count {
-    display: block;
-    font-size: .6rem;
-    opacity: .7;
-    margin-top: 1px;
-  }
-  .slot-btn-all {
-    grid-column: span 1;
-    font-size: .72rem;
-    font-weight: 600;
-  }
+  .icon-btn:hover { background: rgba(231,76,60,.25); border-color: #484f58; }
+  .icon-btn.refresh:hover { background: rgba(46,204,113,.18); }
 
   /* ── Popup ── */
   .maplibregl-popup-content {
-    background: rgba(22,27,34,.95) !important;
-    border: 1px solid #30363d !important;
-    border-radius: 10px !important;
-    color: #e6edf3 !important;
-    padding: 12px 14px !important;
+    background: rgba(22,27,34,.96) !important; border: 1px solid #30363d !important;
+    border-radius: 10px !important; color: #e6edf3 !important;
+    padding: 11px 13px !important;
     font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif !important;
-    font-size: .82rem !important;
-    min-width: 180px;
+    font-size: .8rem !important; min-width: 175px;
   }
-  .maplibregl-popup-tip { border-top-color: rgba(22,27,34,.95) !important; }
+  .maplibregl-popup-tip { border-top-color: rgba(22,27,34,.96) !important; }
   .popup-slot {
-    background: rgba(231,76,60,.2);
-    border: 1px solid #e74c3c;
-    color: #f47174;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: .7rem;
-    font-weight: 600;
-    display: inline-block;
-    margin-bottom: 6px;
+    background: rgba(231,76,60,.18); border: 1px solid #e74c3c; color: #f47174;
+    border-radius: 5px; padding: 2px 7px; font-size: .67rem; font-weight: 600;
+    display: inline-block; margin-bottom: 5px;
   }
-  .popup-addr { color: #e6edf3; margin-bottom: 4px; font-weight: 500; }
-  .popup-desc { color: #8b949e; font-size: .78rem; }
-  .popup-time { color: #6e7681; font-size: .72rem; margin-top: 6px; }
+  .popup-addr { color: #e6edf3; margin-bottom: 3px; font-weight: 500; }
+  .popup-desc { color: #8b949e; font-size: .76rem; }
+  .popup-time { color: #6e7681; font-size: .7rem; margin-top: 5px; }
 
   /* ── Loading ── */
   .loading-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(13,17,23,.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 20;
-    backdrop-filter: blur(4px);
+    position: absolute; inset: 0; background: rgba(13,17,23,.65);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 20; backdrop-filter: blur(4px);
   }
   .loading-overlay.hidden { display: none; }
   .spinner {
-    width: 40px; height: 40px;
-    border: 3px solid #30363d;
-    border-top-color: #e74c3c;
-    border-radius: 50%;
-    animation: spin .8s linear infinite;
+    width: 36px; height: 36px; border: 3px solid #30363d;
+    border-top-color: #e74c3c; border-radius: 50%; animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── 脈衝動畫（CSS）── */
-  @keyframes pulse-ring {
-    0%   { transform: scale(.8); opacity: .8; }
-    70%  { transform: scale(1.6); opacity: 0; }
-    100% { transform: scale(1.6); opacity: 0; }
+  /* ── 報表面板 ── */
+  .report-panel {
+    position: fixed; top: 0; right: -420px; width: 420px; height: 100%;
+    background: rgba(13,17,23,.97); backdrop-filter: blur(16px);
+    border-left: 1px solid #21262d; z-index: 50;
+    display: flex; flex-direction: column;
+    transition: right .3s cubic-bezier(.4,0,.2,1);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
   }
+  .report-panel.open { right: 0; }
+  .report-panel-header {
+    padding: 0 16px; height: 44px; border-bottom: 1px solid #21262d;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .report-panel-header h2 { font-size: .9rem; font-weight: 700; color: #e6edf3; }
+  .report-close {
+    background: none; border: none; color: #6e7681; font-size: 1.2rem;
+    cursor: pointer; padding: 4px 8px; border-radius: 5px; transition: color .15s;
+  }
+  .report-close:hover { color: #e6edf3; }
+  .report-body { flex: 1; overflow-y: auto; padding: 14px 16px 20px; }
+  .report-section { margin-bottom: 20px; }
+  .report-section-title {
+    font-size: .68rem; font-weight: 700; color: #6e7681;
+    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px;
+  }
+  /* 指標卡 */
+  .kpi-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .kpi-card {
+    flex: 1; background: rgba(255,255,255,.04); border: 1px solid #30363d;
+    border-radius: 9px; padding: 10px 10px 8px; text-align: center;
+  }
+  .kpi-value { font-size: 1.2rem; font-weight: 700; color: #e6edf3; line-height: 1.1; }
+  .kpi-value.up   { color: #f87171; }
+  .kpi-value.down { color: #34d399; }
+  .kpi-desc { font-size: .6rem; color: #6e7681; margin-top: 3px; line-height: 1.3; }
+  /* 圖表容器 */
+  .chart-wrap {
+    background: rgba(255,255,255,.03); border: 1px solid #21262d;
+    border-radius: 9px; padding: 12px; position: relative;
+  }
+  .chart-wrap canvas { max-height: 200px; }
+  /* 報表按鈕 */
+  .analytics-btn {
+    background: rgba(96,165,250,.12); border: 1px solid rgba(96,165,250,.35);
+    color: #60a5fa; border-radius: 8px; padding: 5px 11px;
+    font-size: .76rem; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+    transition: all .2s; white-space: nowrap; flex-shrink: 0;
+  }
+  .analytics-btn:hover { background: rgba(96,165,250,.22); }
 </style>
 </head>
 <body>
 
-<!-- Header -->
 <div class="header">
   <div class="header-left">
     <div class="header-icon">🚭</div>
-    <div>
-      <h1>台北市吸菸熱點地圖</h1>
-      <p>即時市民通報資料</p>
-    </div>
+    <h1>台北市吸菸熱點地圖</h1>
+    <span class="header-sub">即時通報</span>
   </div>
-  <a class="report-btn" id="report-link" href="#" target="_blank">
-    📍 我要通報
-  </a>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="analytics-btn" id="analytics-btn">📊 成效報表</button>
+    <a class="report-btn" id="report-link" href="#" target="_blank">📍 通報</a>
+  </div>
 </div>
 
-<!-- 地圖 -->
+<!-- 報表面板 -->
+<div class="report-panel" id="report-panel">
+  <div class="report-panel-header">
+    <h2>📊 成效報表</h2>
+    <button class="report-close" id="report-close">✕</button>
+  </div>
+  <div class="report-body">
+
+    <!-- 指標卡 -->
+    <div class="report-section">
+      <div class="report-section-title">整體指標</div>
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-total">—</div>
+          <div class="kpi-desc">資料範圍<br>總通報數</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-mom">—</div>
+          <div class="kpi-desc">最近月份<br>環比變化</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-streak">—</div>
+          <div class="kpi-desc">連續下降<br>月數</div>
+        </div>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-peak-month">—</div>
+          <div class="kpi-desc">歷史峰值<br>月份</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-peak-slot">—</div>
+          <div class="kpi-desc">全域最熱<br>時段</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-months">—</div>
+          <div class="kpi-desc">涵蓋月數</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 月趨勢折線圖 -->
+    <div class="report-section">
+      <div class="report-section-title">每月通報量趨勢</div>
+      <div class="chart-wrap">
+        <canvas id="chart-trend"></canvas>
+      </div>
+    </div>
+
+    <!-- 時段分布橫條圖 -->
+    <div class="report-section">
+      <div class="report-section-title">時段分布（全部月份）</div>
+      <div class="chart-wrap">
+        <canvas id="chart-slot"></canvas>
+      </div>
+    </div>
+
+    <!-- 月份×時段 堆疊圖 -->
+    <div class="report-section">
+      <div class="report-section-title">各月時段分布</div>
+      <div class="chart-wrap">
+        <canvas id="chart-stack"></canvas>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <div id="map">
-  <!-- 統計浮框 -->
-  <div class="stats-overlay">
-    <div class="stat-row">
-      <span>顯示點位</span>
-      <span class="stat-num" id="stat-visible">—</span>
-    </div>
-    <div class="stat-row">
-      <span>總回報數</span>
-      <span class="stat-num" id="stat-total">—</span>
-    </div>
-    <div class="stat-row">
-      <span>最熱時段</span>
-      <span class="stat-num" id="stat-peak">—</span>
-    </div>
-  </div>
 
-  <!-- 定位按鈕 -->
-  <button class="locate-btn" id="locate-btn" title="移至我的位置">📍</button>
+  <!-- 左側控制面板 -->
+  <div class="left-panel">
 
-  <!-- 時段選擇面板 -->
-  <div class="slot-panel">
-    <div class="slot-panel-inner">
-      <div class="slot-header">
-        <span class="slot-header-title">⏱ 時段篩選</span>
-        <span class="slot-current-label" id="slot-current-label"></span>
+    <!-- 統計圓圈 -->
+    <div class="stat-circles">
+      <div class="stat-circle">
+        <div class="stat-ring stat-ring-visible" id="stat-visible">—</div>
+        <div class="stat-label">顯示<br>點位</div>
       </div>
-      <div class="slot-grid" id="slot-grid">
-        <!-- 由 JS 動態產生 -->
+      <div class="stat-circle">
+        <div class="stat-ring stat-ring-total" id="stat-total">—</div>
+        <div class="stat-label">總回<br>報數</div>
+      </div>
+      <div class="stat-circle">
+        <div class="stat-ring stat-ring-peak" id="stat-peak">—</div>
+        <div class="stat-label">最熱<br>時段</div>
       </div>
     </div>
+
+    <!-- 資料來源 -->
+    <div class="data-source-badge" id="data-source-badge">
+      <div class="dot"></div><span id="data-source-text">載入中…</span>
+    </div>
+
+    <!-- 視圖切換 -->
+    <div class="panel-view">
+      <button class="view-btn active" id="btn-cluster"><span class="vicon">🔵</span>分群</button>
+      <button class="view-btn" id="btn-heatmap"><span class="vicon">🔥</span>熱力</button>
+      <button class="view-btn" id="btn-points"><span class="vicon">⚪</span>點位</button>
+    </div>
+
+    <!-- 圖例（分群模式）-->
+    <div class="panel-legend" id="legend-cluster">
+      <div class="legend-title">群組大小</div>
+      <div class="legend-row">
+        <div class="legend-swatch" style="background:#2ecc71; width:13px; height:13px;"></div><span>1–4 筆</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-swatch" style="background:#f1c40f; width:17px; height:17px;">5</div><span>5–14 筆</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-swatch" style="background:#e67e22; width:21px; height:21px;">15</div><span>15–29 筆</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-swatch" style="background:#e74c3c; width:25px; height:25px;">30</div><span>30 筆以上</span>
+      </div>
+    </div>
+
+    <!-- 圖例（點位模式）-->
+    <div class="panel-legend hidden" id="legend-points">
+      <div class="legend-title">點位色階</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#60a5fa; width:11px; height:11px;"></div><span>00–04 時</span></div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#34d399; width:11px; height:11px;"></div><span>04–10 時</span></div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#facc15; width:11px; height:11px;"></div><span>10–16 時</span></div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#f87171; width:11px; height:11px;"></div><span>16–24 時</span></div>
+    </div>
+
+    <!-- 月份滑桿 -->
+    <div class="month-filter" id="month-filter">
+      <div class="month-filter-title">月份篩選</div>
+      <div class="month-label" id="month-label">全部時間</div>
+      <div class="month-slider-wrap">
+        <input type="range" class="month-slider" id="month-slider" min="0" max="0" value="0" step="1">
+      </div>
+      <div class="month-nav">
+        <button class="month-nav-btn" id="month-prev">◀</button>
+        <button class="month-all-btn active" id="month-all">全部時間</button>
+        <button class="month-nav-btn" id="month-next">▶</button>
+      </div>
+    </div>
+
+    <!-- 時段篩選（所有模式共用）-->
+    <div class="slot-filter" id="slot-filter">
+      <div class="slot-filter-title">通報時段 <span class="slot-filter-clear" id="slot-clear">全選</span></div>
+      <div class="slot-band active" data-band="0"><div class="band-dot" style="background:#60a5fa"></div><span>00–04 時</span><span class="band-count" id="bc-0"></span></div>
+      <div class="slot-band active" data-band="1"><div class="band-dot" style="background:#34d399"></div><span>04–10 時</span><span class="band-count" id="bc-1"></span></div>
+      <div class="slot-band active" data-band="2"><div class="band-dot" style="background:#facc15"></div><span>10–16 時</span><span class="band-count" id="bc-2"></span></div>
+      <div class="slot-band active" data-band="3"><div class="band-dot" style="background:#f87171"></div><span>16–24 時</span><span class="band-count" id="bc-3"></span></div>
+    </div>
+
   </div>
 
-  <!-- Loading -->
-  <div class="loading-overlay" id="loading">
-    <div class="spinner"></div>
+  <!-- 右側圖示按鈕 -->
+  <div class="right-btns">
+    <button class="icon-btn" id="locate-btn" title="移至我的位置">📍</button>
+    <button class="icon-btn refresh" id="refresh-btn" title="重新載入">🔄</button>
   </div>
+
+  <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
-// ── 設定 ─────────────────────────────────────────────────────
-var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';  // ← 部署 Apps Script 後填入
+var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
 var TAIPEI_CENTER = [121.5654, 25.0330];
+var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
 
-var SLOT_LABELS = [
-  '00–02','02–04','04–06','06–08',
-  '08–10','10–12','12–14','14–16',
-  '16–18','18–20','20–22','22–24'
+var SLOT_COLORS = [
+  '#60a5fa','#818cf8','#a78bfa','#34d399',
+  '#4ade80','#facc15','#fb923c','#f87171',
+  '#ef4444','#dc2626','#7c3aed','#2563eb'
 ];
 
-// ── 狀態 ─────────────────────────────────────────────────────
 var allFeatures = [];
-var currentSlot = 'all';
+var viewMode = 'cluster';
+var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
+var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
-// ── 地圖初始化 ────────────────────────────────────────────────
+var sc = null; // supercluster 實例
+
+function buildSupercluster(features) {
+  try {
+    sc = new Supercluster({ radius: 50, maxZoom: 15 });
+    sc.load(features);
+    console.log('[cluster] supercluster loaded', features.length, 'features');
+  } catch(e) {
+    console.error('[cluster] buildSupercluster failed', e);
+    sc = null;
+  }
+}
+
+function abbrev(n) {
+  return n >= 1000 ? Math.floor(n / 1000) + 'k' : String(n);
+}
+
+function updateClusters() {
+  if (!sc || !map || !map.getSource('reports')) return;
+  if (viewMode !== 'cluster') return;
+  try {
+    var bounds = map.getBounds();
+    var zoom = Math.floor(map.getZoom());
+    var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    var clusters = sc.getClusters(bbox, zoom);
+    // 預先寫入 label 字串，避免在 MapLibre expression 裡做複雜運算
+    clusters.forEach(function(f) {
+      if (f.properties.point_count) {
+        f.properties.point_count_label = abbrev(f.properties.point_count);
+      }
+    });
+    map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
+    console.log('[cluster] updateClusters zoom=' + zoom + ' clusters=' + clusters.length);
+  } catch(e) {
+    console.error('[cluster] updateClusters failed', e);
+  }
+}
+
+// 時段 band 對應的 time_slot 範圍（0–11 共 12 個 2 小時時段）
+var SLOT_BANDS = [
+  { slots: [0, 1],        label: '00–04 時' },
+  { slots: [2, 3, 4],     label: '04–10 時' },
+  { slots: [5, 6, 7],     label: '10–16 時' },
+  { slots: [8, 9, 10, 11], label: '16–24 時' }
+];
+// 目前選取的 band 集合（全選狀態）
+var activeBands = new Set([0, 1, 2, 3]);
+
 map = new maplibregl.Map({
   container: 'map',
   style: 'https://tiles.openfreemap.org/styles/liberty',
-  center: TAIPEI_CENTER,
-  zoom: 12,
-  minZoom: 10,
-  maxZoom: 18,
+  center: TAIPEI_CENTER, zoom: 12, minZoom: 10, maxZoom: 18,
   attributionControl: false
 });
-
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
 map.on('load', function() {
-  initLayers();
+  try { initLayers(); } catch(e) { console.error('[initLayers] FAILED:', e); }
   loadData();
-  updateCurrentSlotLabel();
-  setInterval(updateCurrentSlotLabel, 60000);
 });
 
-// ── 圖層初始化 ────────────────────────────────────────────────
 function initLayers() {
   map.addSource('reports', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-    cluster: false
+    data: { type: 'FeatureCollection', features: [] }
   });
 
-  // 脈衝外圈
+  map.addSource('reports-heat', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+
   map.addLayer({
-    id: 'reports-pulse',
-    type: 'circle',
-    source: 'reports',
+    id: 'layer-heatmap', type: 'heatmap', source: 'reports-heat',
+    layout: { visibility: 'none' },
     paint: {
-      'circle-radius': [
-        'interpolate', ['linear'], ['zoom'],
-        10, 12, 14, 22, 18, 30
+      'heatmap-weight': 0.4,
+      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 13, 1.5, 15, 3],
+      'heatmap-color': [
+        'interpolate', ['linear'], ['heatmap-density'],
+        0,    'rgba(0,0,0,0)',
+        0.05, 'rgba(33,102,172,0.5)',
+        0.2,  'rgb(103,169,207)',
+        0.4,  'rgb(253,219,199)',
+        0.6,  'rgb(239,138,98)',
+        0.8,  'rgb(217,72,1)',
+        1,    'rgb(178,24,43)'
       ],
-      'circle-color': '#e74c3c',
-      'circle-opacity': 0,
-      'circle-stroke-width': 2,
-      'circle-stroke-color': '#e74c3c',
-      'circle-stroke-opacity': [
-        'interpolate', ['linear'], ['zoom'],
-        10, 0.3, 14, 0.15
-      ]
+      // 半徑壓小，拉近才放大，讓熱點保持空間獨立
+      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 13, 12, 15, 22],
+      'heatmap-opacity': 0.85
     }
   });
 
-  // 熱力漸變點位（主圖層）
+  // ── 分群模式圖層（source: reports，有 cluster） ──
+
+  // 分群外暈光環
   map.addLayer({
-    id: 'reports-circle',
-    type: 'circle',
-    source: 'reports',
+    id: 'layer-cluster-glow', type: 'circle', source: 'reports',
+    filter: ['has', 'point_count'],
+    layout: { visibility: 'visible' },
     paint: {
-      'circle-radius': [
-        'interpolate', ['linear'], ['zoom'],
-        10, 7, 14, 14, 18, 22
-      ],
+      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 22, 5, 34, 15, 48, 30, 62],
+      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.12, 5, 0.15, 15, 0.18, 30, 0.22],
+      'circle-blur': 0.65, 'circle-stroke-width': 0
+    }
+  });
+
+  // 分群主圓
+  map.addLayer({
+    id: 'layer-clusters', type: 'circle', source: 'reports',
+    filter: ['has', 'point_count'],
+    layout: { visibility: 'visible' },
+    paint: {
+      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 14, 5, 22, 15, 32, 30, 42],
+      'circle-opacity': 0.92,
+      'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(255,255,255,.65)'
+    }
+  });
+
+  // 分群模式：展開後個別點（reports source，filter: !has point_count）
+  map.addLayer({
+    id: 'layer-halo', type: 'circle', source: 'reports',
+    filter: ['!', ['has', 'point_count']],
+    layout: { visibility: 'visible' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 8, 18, 16],
+      'circle-color': '#ffffff', 'circle-opacity': 0.18, 'circle-stroke-width': 0
+    }
+  });
+
+  map.addLayer({
+    id: 'layer-points', type: 'circle', source: 'reports',
+    filter: ['!', ['has', 'point_count']],
+    layout: { visibility: 'visible' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 5, 18, 12],
       'circle-color': [
-        'interpolate', ['linear'],
-        ['coalesce', ['to-number', ['get', 'time_slot']], 0],
-        0,  '#3498db',
-        3,  '#2ecc71',
-        6,  '#f1c40f',
-        9,  '#e67e22',
-        11, '#e74c3c'
+        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
+        '#60a5fa', 2, '#34d399', 5, '#facc15', 8, '#f87171'
       ],
-      'circle-opacity': .85,
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#fff',
-      'circle-stroke-opacity': .6,
-      'circle-blur': .1
+      'circle-opacity': 0.9, 'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.8
     }
   });
 
-  // 滑鼠互動
-  map.on('mouseenter', 'reports-circle', function() {
-    map.getCanvas().style.cursor = 'pointer';
+  // ── 點位模式圖層（source: reports-heat，無分群，顯示全部原始點）──
+  map.addLayer({
+    id: 'layer-halo-raw', type: 'circle', source: 'reports-heat',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 9, 18, 16],
+      'circle-color': '#ffffff', 'circle-opacity': 0.15, 'circle-stroke-width': 0
+    }
   });
-  map.on('mouseleave', 'reports-circle', function() {
-    map.getCanvas().style.cursor = '';
+
+  map.addLayer({
+    id: 'layer-points-raw', type: 'circle', source: 'reports-heat',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 11],
+      'circle-color': [
+        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
+        '#60a5fa',  // slot 0–1  (00–04 時)
+        2,  '#34d399',  // slot 2–4  (04–10 時)
+        5,  '#facc15',  // slot 5–7  (10–16 時)
+        8,  '#f87171'   // slot 8–11 (16–24 時)
+      ],
+      'circle-opacity': 0.85, 'circle-stroke-width': 0
+    }
   });
-  map.on('click', 'reports-circle', function(e) {
+
+  // ── 互動事件 ──
+  map.on('click', 'layer-clusters', function(e) {
+    var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
+    if (!feature || !sc) return;
+    var clusterId = feature.properties.cluster_id;
+    var zoom = sc.getClusterExpansionZoom(clusterId);
+    map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
+  });
+
+  function showPointPopup(e) {
     var props = e.features[0].properties;
     var coords = e.features[0].geometry.coordinates.slice();
-    var slot = parseInt(props.time_slot);
+    var slot = parseInt(props.time_slot) || 0;
     var ts = props.timestamp ? new Date(props.timestamp).toLocaleString('zh-TW') : '';
-
     new maplibregl.Popup({ offset: 12, maxWidth: '240px' })
       .setLngLat(coords)
       .setHTML(
         '<div class="popup-slot">⏱ ' + SLOT_LABELS[slot] + '</div>' +
         (props.address_input ? '<div class="popup-addr">📍 ' + esc(props.address_input) + '</div>' : '') +
-        (props.description ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
+        (props.description   ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
         (ts ? '<div class="popup-time">🕐 ' + ts + '</div>' : '')
-      )
-      .addTo(map);
+      ).addTo(map);
+  }
+
+  map.on('click', 'layer-points', showPointPopup);
+  map.on('click', 'layer-points-raw', showPointPopup);
+
+  ['layer-clusters','layer-points','layer-points-raw'].forEach(function(id) {
+    map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
+
+  // 地圖移動/縮放時重算群組
+  map.on('moveend', updateClusters);
+  map.on('zoomend', updateClusters);
 }
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── 資料載入 ──────────────────────────────────────────────────
-// time_slot 確保為數值，座標確保為有效數字
+var LAYER_VIS = {
+  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' }
+};
+
+function setViewMode(mode) {
+  viewMode = mode;
+  var vis = LAYER_VIS[mode];
+  Object.keys(vis).forEach(function(id) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
+  });
+  document.querySelectorAll('.view-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.id === 'btn-' + mode);
+  });
+  document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
+  document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
+  if (mode === 'cluster') updateClusters();
+}
+
+document.getElementById('btn-cluster').addEventListener('click', function() { setViewMode('cluster'); });
+document.getElementById('btn-heatmap').addEventListener('click', function() { setViewMode('heatmap'); });
+document.getElementById('btn-points').addEventListener('click',  function() { setViewMode('points'); });
+
+// 時段 band 篩選
+document.querySelectorAll('.slot-band').forEach(function(el) {
+  el.addEventListener('click', function() {
+    var b = parseInt(el.dataset.band);
+    if (activeBands.has(b)) {
+      // 至少保留一個選取
+      if (activeBands.size > 1) activeBands.delete(b);
+    } else {
+      activeBands.add(b);
+    }
+    updateSlotBandUI();
+    applyFilter();
+  });
+});
+document.getElementById('slot-clear').addEventListener('click', function() {
+  if (activeBands.size === 4) return; // 已全選
+  activeBands = new Set([0, 1, 2, 3]);
+  updateSlotBandUI();
+  applyFilter();
+});
+
+function setDataSource(type, text) {
+  var badge = document.getElementById('data-source-badge');
+  badge.className = 'data-source-badge ' + type;
+  document.getElementById('data-source-text').textContent = text;
+}
+
+function fitToFeatures(features) {
+  if (!features || features.length === 0) return;
+  if (features.length === 1) { map.flyTo({ center: features[0].geometry.coordinates, zoom: 15, duration: 1200 }); return; }
+  var bounds = new maplibregl.LngLatBounds();
+  features.forEach(function(f) { bounds.extend(f.geometry.coordinates); });
+  map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 1200 });
+}
+
 function normalizeFeatures(features) {
   return features.filter(function(f) {
     var c = f.geometry && f.geometry.coordinates;
-    return c && !isNaN(c[0]) && !isNaN(c[1]);
+    return c && !isNaN(parseFloat(c[0])) && !isNaN(parseFloat(c[1]));
   }).map(function(f) {
     f.properties.time_slot = parseInt(f.properties.time_slot) || 0;
     return f;
   });
 }
 
-function loadData() {
-  var url = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL')
-    ? API_URL + '?action=getReports'
-    : MOCK_URL;
-
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(geojson) {
-      allFeatures = normalizeFeatures(geojson.features || []);
-      buildSlotButtons();
-      filterAndRender(currentSlot);
-      document.getElementById('loading').classList.add('hidden');
-    })
-    .catch(function() {
-      // Fallback to mock
-      fetch(MOCK_URL)
-        .then(function(r) { return r.json(); })
-        .then(function(geojson) {
-          allFeatures = normalizeFeatures(geojson.features || []);
-          buildSlotButtons();
-          filterAndRender(currentSlot);
-          document.getElementById('loading').classList.add('hidden');
-        });
-    });
-}
-
-// ── 時段按鈕建立 ──────────────────────────────────────────────
-function buildSlotButtons() {
-  var slotCounts = new Array(12).fill(0);
-  allFeatures.forEach(function(f) {
-    var s = parseInt(f.properties.time_slot);
-    if (s >= 0 && s < 12) slotCounts[s]++;
-  });
-
-  var grid = document.getElementById('slot-grid');
-  grid.innerHTML = '';
-
-  // 全部按鈕
-  var allBtn = document.createElement('button');
-  allBtn.className = 'slot-btn slot-btn-all' + (currentSlot === 'all' ? ' active' : '');
-  allBtn.dataset.slot = 'all';
-  allBtn.innerHTML = '全部<span class="slot-count">' + allFeatures.length + '</span>';
-  allBtn.onclick = function() { selectSlot('all'); };
-  grid.appendChild(allBtn);
-
-  SLOT_LABELS.forEach(function(label, i) {
-    var btn = document.createElement('button');
-    var hasData = slotCounts[i] > 0;
-    btn.className = 'slot-btn' +
-      (currentSlot === String(i) ? ' active' : '') +
-      (hasData ? ' has-data' : '');
-    btn.dataset.slot = String(i);
-    btn.innerHTML = label + '<span class="slot-count">' + (hasData ? slotCounts[i] : '–') + '</span>';
-    btn.onclick = function() { selectSlot(String(i)); };
-    grid.appendChild(btn);
-  });
-}
-
-function selectSlot(slot) {
-  currentSlot = slot;
-  document.querySelectorAll('.slot-btn').forEach(function(b) {
-    b.classList.toggle('active', b.dataset.slot === slot);
-  });
-  filterAndRender(slot);
-}
-
-// ── 資料篩選與渲染 ────────────────────────────────────────────
-function filterAndRender(slot) {
-  var filtered = slot === 'all'
-    ? allFeatures
-    : allFeatures.filter(function(f) {
-        return String(f.properties.time_slot) === slot;
-      });
-
-  if (map.getSource('reports')) {
-    map.getSource('reports').setData({
-      type: 'FeatureCollection',
-      features: filtered
-    });
-  }
-
-  // 統計更新
+function updateStats(filtered) {
   document.getElementById('stat-visible').textContent = filtered.length;
-  document.getElementById('stat-total').textContent = allFeatures.length;
-
-  // 最熱時段
-  if (allFeatures.length > 0) {
+  document.getElementById('stat-total').textContent   = allFeatures.length;
+  var src = filtered.length > 0 ? filtered : allFeatures;
+  if (src.length > 0) {
     var counts = new Array(12).fill(0);
-    allFeatures.forEach(function(f) {
+    src.forEach(function(f) {
       var s = parseInt(f.properties.time_slot);
       if (s >= 0 && s < 12) counts[s]++;
     });
@@ -531,34 +778,335 @@ function filterAndRender(slot) {
   }
 }
 
-// ── 目前時段標記 ─────────────────────────────────────────────
-function updateCurrentSlotLabel() {
-  var slot = Math.floor(new Date().getHours() / 2);
-  document.getElementById('slot-current-label').textContent =
-    '目前時段：' + SLOT_LABELS[slot];
+function featureMonth(f) {
+  var ts = f.properties.timestamp;
+  if (!ts) return null;
+  var d = new Date(ts);
+  if (isNaN(d)) return null;
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
 
-// ── 定位按鈕 ─────────────────────────────────────────────────
+function getFilteredFeatures() {
+  // 月份篩選
+  var base = allFeatures;
+  if (selectedMonth) {
+    base = allFeatures.filter(function(f) { return featureMonth(f) === selectedMonth; });
+  }
+  // 時段 band 篩選
+  var allowedSlots = new Set();
+  activeBands.forEach(function(b) {
+    SLOT_BANDS[b].slots.forEach(function(s) { allowedSlots.add(s); });
+  });
+  if (allowedSlots.size === 12) return base;
+  return base.filter(function(f) {
+    return allowedSlots.has(parseInt(f.properties.time_slot));
+  });
+}
+
+function initMonthSlider() {
+  // 從 allFeatures 提取所有月份並排序
+  var monthSet = {};
+  allFeatures.forEach(function(f) {
+    var m = featureMonth(f);
+    if (m) monthSet[m] = true;
+  });
+  availableMonths = Object.keys(monthSet).sort();
+  if (availableMonths.length === 0) return;
+
+  var slider = document.getElementById('month-slider');
+  // 0 = 全部時間，1..n = 月份索引
+  slider.min = 0;
+  slider.max = availableMonths.length;
+  slider.value = 0;
+  updateMonthUI();
+}
+
+function updateMonthUI() {
+  var slider = document.getElementById('month-slider');
+  var idx = parseInt(slider.value);
+  var allBtn = document.getElementById('month-all');
+  var label = document.getElementById('month-label');
+  var prevBtn = document.getElementById('month-prev');
+  var nextBtn = document.getElementById('month-next');
+
+  if (idx === 0) {
+    selectedMonth = null;
+    label.textContent = '全部時間';
+    allBtn.classList.add('active');
+  } else {
+    selectedMonth = availableMonths[idx - 1];
+    label.textContent = selectedMonth.replace('-', ' 年 ') + ' 月';
+    allBtn.classList.remove('active');
+  }
+  prevBtn.disabled = idx === 0;
+  nextBtn.disabled = idx === availableMonths.length;
+}
+
+document.getElementById('month-slider').addEventListener('input', function() {
+  updateMonthUI();
+  applyFilter();
+});
+document.getElementById('month-prev').addEventListener('click', function() {
+  var slider = document.getElementById('month-slider');
+  if (parseInt(slider.value) > 0) { slider.value--; updateMonthUI(); applyFilter(); }
+});
+document.getElementById('month-next').addEventListener('click', function() {
+  var slider = document.getElementById('month-slider');
+  if (parseInt(slider.value) < availableMonths.length) { slider.value++; updateMonthUI(); applyFilter(); }
+});
+document.getElementById('month-all').addEventListener('click', function() {
+  var slider = document.getElementById('month-slider');
+  slider.value = 0;
+  updateMonthUI();
+  applyFilter();
+});
+
+function applyFilter() {
+  var filtered = getFilteredFeatures();
+  var fc = { type: 'FeatureCollection', features: filtered };
+  // 重建 supercluster（cluster 模式用）
+  buildSupercluster(filtered);
+  updateClusters();
+  // reports-heat 直接放全部原始點（heatmap / points 模式用）
+  if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
+  updateStats(filtered);
+}
+
+function updateSlotBandUI() {
+  var allActive = activeBands.size === 4;
+  document.getElementById('slot-clear').textContent = allActive ? '全選' : '清除篩選';
+  // 計算每個 band 的資料筆數
+  var counts = [0, 0, 0, 0];
+  allFeatures.forEach(function(f) {
+    var s = parseInt(f.properties.time_slot);
+    for (var b = 0; b < SLOT_BANDS.length; b++) {
+      if (SLOT_BANDS[b].slots.indexOf(s) !== -1) { counts[b]++; break; }
+    }
+  });
+  document.querySelectorAll('.slot-band').forEach(function(el) {
+    var b = parseInt(el.dataset.band);
+    var isActive = activeBands.has(b);
+    el.classList.toggle('active', isActive);
+    el.classList.toggle('dimmed', !isActive);
+    document.getElementById('bc-' + b).textContent = counts[b] > 0 ? counts[b].toLocaleString() : '';
+  });
+}
+
+function applyData(features) {
+  allFeatures = features;
+  initMonthSlider();
+  updateSlotBandUI();
+  applyFilter();
+  document.getElementById('loading').classList.add('hidden');
+}
+
+function loadData() {
+  document.getElementById('loading').classList.remove('hidden');
+  setDataSource('', '載入中…');
+  fetch(API_URL + '?action=getReports', { redirect: 'follow' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function(text) {
+      var geojson = JSON.parse(text);
+      if (!geojson.features) throw new Error('缺少 features');
+      var features = normalizeFeatures(geojson.features);
+      setDataSource('live', '即時資料 • ' + features.length + ' 筆');
+      applyData(features);
+      fitToFeatures(features);
+    })
+    .catch(function(err) {
+      console.warn('API 載入失敗，改用 mock：', err);
+      setDataSource('mock', '示範資料');
+      fetch(MOCK_URL)
+        .then(function(r) { return r.json(); })
+        .then(function(geojson) { applyData(normalizeFeatures(geojson.features || [])); })
+        .catch(function(e) {
+          setDataSource('err', '載入失敗');
+          document.getElementById('loading').classList.add('hidden');
+          console.error(e);
+        });
+    });
+}
+
 document.getElementById('locate-btn').addEventListener('click', function() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(function(pos) {
-    map.flyTo({
-      center: [pos.coords.longitude, pos.coords.latitude],
-      zoom: 15,
-      duration: 1000
-    });
+    map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 15, duration: 1000 });
   });
 });
 
-// ── 通報連結（部署後自動填入）── ──────────────────────────────
-(function setReportLink() {
-  var link = document.getElementById('report-link');
-  if (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') {
-    link.href = API_URL;
-  } else {
-    link.href = '#';
-    link.title = '請先部署 Apps Script 並填入 API_URL';
+document.getElementById('refresh-btn').addEventListener('click', loadData);
+
+// ── 報表面板 ──────────────────────────────────────────────────
+var chartTrend = null, chartSlot = null, chartStack = null;
+
+var BAND_COLORS = ['#60a5fa', '#34d399', '#facc15', '#f87171'];
+var BAND_LABELS = ['00–04 時', '04–10 時', '10–16 時', '16–24 時'];
+var BAND_SLOTS  = [[0,1],[2,3,4],[5,6,7],[8,9,10,11]];
+
+function slotToBand(s) {
+  for (var b = 0; b < BAND_SLOTS.length; b++) {
+    if (BAND_SLOTS[b].indexOf(s) !== -1) return b;
   }
+  return 3;
+}
+
+function buildReportData() {
+  // 月份 → { total, bands[4] }
+  var monthMap = {};
+  allFeatures.forEach(function(f) {
+    var m = featureMonth(f);
+    if (!m) return;
+    if (!monthMap[m]) monthMap[m] = { total: 0, bands: [0,0,0,0] };
+    monthMap[m].total++;
+    monthMap[m].bands[slotToBand(parseInt(f.properties.time_slot) || 0)]++;
+  });
+  var months = Object.keys(monthMap).sort();
+  return { months: months, monthMap: monthMap };
+}
+
+function renderReportCharts() {
+  var d = buildReportData();
+  var months = d.months;
+  var monthMap = d.monthMap;
+  if (!months.length) return;
+
+  var totals = months.map(function(m) { return monthMap[m].total; });
+
+  // ── 指標卡 ──
+  document.getElementById('kpi-total').textContent = allFeatures.length.toLocaleString();
+  document.getElementById('kpi-months').textContent = months.length + ' 個月';
+
+  // 環比（最近兩個月）
+  if (months.length >= 2) {
+    var last = totals[totals.length - 1];
+    var prev = totals[totals.length - 2];
+    var pct = prev > 0 ? Math.round((last - prev) / prev * 100) : 0;
+    var momEl = document.getElementById('kpi-mom');
+    momEl.textContent = (pct >= 0 ? '+' : '') + pct + '%';
+    momEl.className = 'kpi-value ' + (pct > 0 ? 'up' : pct < 0 ? 'down' : '');
+  }
+
+  // 連續下降月數
+  var streak = 0;
+  for (var i = totals.length - 1; i >= 1; i--) {
+    if (totals[i] < totals[i-1]) streak++;
+    else break;
+  }
+  document.getElementById('kpi-streak').textContent = streak + ' 個月';
+
+  // 峰值月
+  var peakIdx = totals.indexOf(Math.max.apply(null, totals));
+  document.getElementById('kpi-peak-month').textContent = months[peakIdx];
+
+  // 全域最熱時段
+  var slotCounts = new Array(12).fill(0);
+  allFeatures.forEach(function(f) {
+    var s = parseInt(f.properties.time_slot) || 0;
+    if (s >= 0 && s < 12) slotCounts[s]++;
+  });
+  var peakSlot = slotCounts.indexOf(Math.max.apply(null, slotCounts));
+  document.getElementById('kpi-peak-slot').textContent = SLOT_LABELS[peakSlot];
+
+  var chartDefaults = {
+    color: '#8b949e',
+    borderColor: '#30363d'
+  };
+  Chart.defaults.color = '#8b949e';
+
+  // ── 折線圖：月趨勢 ──
+  if (chartTrend) chartTrend.destroy();
+  chartTrend = new Chart(document.getElementById('chart-trend'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [{
+        label: '通報數',
+        data: totals,
+        borderColor: '#e74c3c',
+        backgroundColor: 'rgba(231,76,60,.1)',
+        pointBackgroundColor: '#e74c3c',
+        pointRadius: 4, pointHoverRadius: 6,
+        tension: 0.3, fill: true, borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // ── 橫條圖：時段分布 ──
+  var bandTotals = [0,0,0,0];
+  allFeatures.forEach(function(f) {
+    bandTotals[slotToBand(parseInt(f.properties.time_slot) || 0)]++;
+  });
+  if (chartSlot) chartSlot.destroy();
+  chartSlot = new Chart(document.getElementById('chart-slot'), {
+    type: 'bar',
+    data: {
+      labels: BAND_LABELS,
+      datasets: [{
+        data: bandTotals,
+        backgroundColor: BAND_COLORS.map(function(c) { return c + 'cc'; }),
+        borderColor: BAND_COLORS,
+        borderWidth: 1, borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' }, beginAtZero: true },
+        y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // ── 堆疊橫條圖：月份 × 時段 ──
+  var stackDatasets = BAND_LABELS.map(function(label, b) {
+    return {
+      label: label,
+      data: months.map(function(m) { return monthMap[m].bands[b]; }),
+      backgroundColor: BAND_COLORS[b] + 'cc',
+      borderColor: BAND_COLORS[b],
+      borderWidth: 1
+    };
+  });
+  if (chartStack) chartStack.destroy();
+  chartStack = new Chart(document.getElementById('chart-stack'), {
+    type: 'bar',
+    data: { labels: months, datasets: stackDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: true, position: 'bottom',
+          labels: { color: '#8b949e', boxWidth: 10, font: { size: 10 }, padding: 8 }
+        }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' } },
+        y: { stacked: true, ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+document.getElementById('analytics-btn').addEventListener('click', function() {
+  document.getElementById('report-panel').classList.add('open');
+  if (allFeatures.length > 0) renderReportCharts();
+});
+document.getElementById('report-close').addEventListener('click', function() {
+  document.getElementById('report-panel').classList.remove('open');
+});
+
+(function() {
+  var link = document.getElementById('report-link');
+  link.href = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') ? API_URL : '#';
 })();
 </script>
 </body>

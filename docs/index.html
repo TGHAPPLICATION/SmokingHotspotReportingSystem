@@ -423,6 +423,14 @@ function initLayers() {
     map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
+
+  // clustered source 在 Web Worker 非同步計算 tiles；
+  // 每次 source 重新載入完成就觸發 repaint，確保切換模式或首次載入不需 zoom 才顯示
+  map.on('sourcedata', function(e) {
+    if (e.sourceId === 'reports' && e.isSourceLoaded) {
+      map.triggerRepaint();
+    }
+  });
 }
 
 function esc(s) {
@@ -446,7 +454,8 @@ function setViewMode(mode) {
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
-  map.triggerRepaint();
+  // 切換模式時同樣強迫重新請求 clustered tiles
+  map.setZoom(map.getZoom());
 }
 
 document.getElementById('btn-cluster').addEventListener('click', function() { setViewMode('cluster'); });
@@ -498,12 +507,9 @@ function applyData(features) {
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(features);
   document.getElementById('loading').classList.add('hidden');
-  // clustering 在 Web Worker 非同步計算，強制重繪確保首次顯示
-  map.once('sourcedata', function(e) {
-    if (e.sourceId === 'reports' && map.isSourceLoaded('reports')) {
-      map.triggerRepaint();
-    }
-  });
+  // setZoom(同值) 強迫 MapLibre 重新請求目前 viewport 的 clustered tiles，
+  // 解決 clustered source 首次不渲染的問題
+  map.setZoom(map.getZoom());
 }
 
 function loadData() {

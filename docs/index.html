@@ -14,7 +14,7 @@
     display: flex; flex-direction: column;
   }
 
-  /* ── Header（壓縮為單薄條）── */
+  /* ── Header ── */
   .header {
     background: rgba(13,17,23,.95);
     border-bottom: 1px solid #21262d;
@@ -41,7 +41,6 @@
   }
   .report-btn:hover { opacity: .85; }
 
-  /* ── 地圖容器 ── */
   #map { flex: 1; position: relative; min-height: 0; }
 
   /* ── 左側控制面板 ── */
@@ -52,58 +51,86 @@
     border: 1px solid #30363d;
     border-radius: 12px;
     z-index: 5;
-    width: 168px;
+    width: 160px;
     overflow: hidden;
   }
 
-  /* 統計區 */
-  .panel-stats { padding: 10px 12px; }
-  .stat-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-size: .76rem; color: #8b949e; margin-bottom: 3px;
+  /* 統計圓圈 */
+  .stat-circles {
+    padding: 12px 8px 10px;
+    display: flex;
+    gap: 4px;
   }
-  .stat-row:last-child { margin-bottom: 0; }
-  .stat-num { font-size: 1rem; font-weight: 700; color: #f47174; }
+  .stat-circle {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+  }
+  .stat-ring {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; line-height: 1.1;
+    position: relative;
+  }
+  .stat-ring-visible {
+    border: 2.5px solid #60a5fa;
+    background: rgba(96,165,250,.1);
+    color: #93c5fd;
+    font-size: 1.05rem;
+  }
+  .stat-ring-total {
+    border: 2.5px solid #818cf8;
+    background: rgba(129,140,248,.1);
+    color: #a5b4fc;
+    font-size: 1.05rem;
+  }
+  .stat-ring-peak {
+    border: 2.5px solid #f47174;
+    background: rgba(244,113,116,.1);
+    color: #f47174;
+    font-size: .62rem;
+    text-align: center;
+    padding: 0 3px;
+    word-break: break-all;
+  }
+  .stat-label {
+    font-size: .58rem; color: #6e7681; text-align: center; line-height: 1.2;
+    white-space: nowrap;
+  }
 
   /* 資料來源徽章 */
   .data-source-badge {
-    padding: 5px 12px; border-top: 1px solid #21262d;
-    font-size: .66rem; color: #8b949e; display: flex; align-items: center; gap: 4px;
+    padding: 5px 10px; border-top: 1px solid #21262d;
+    font-size: .63rem; color: #8b949e; display: flex; align-items: center; gap: 4px;
   }
   .data-source-badge .dot { width: 5px; height: 5px; border-radius: 50%; background: #8b949e; flex-shrink: 0; }
   .data-source-badge.live .dot { background: #2ecc71; }
   .data-source-badge.mock .dot { background: #f1c40f; }
   .data-source-badge.err  .dot { background: #e74c3c; }
 
-  /* 分隔線 */
-  .panel-divider { height: 1px; background: #21262d; }
-
-  /* 視圖模式切換 */
-  .panel-view { padding: 6px 8px; display: flex; gap: 4px; }
+  /* 視圖切換 */
+  .panel-view { padding: 6px 8px; display: flex; gap: 4px; border-top: 1px solid #21262d; }
   .view-btn {
     flex: 1; background: rgba(255,255,255,.04); border: 1px solid #30363d;
-    border-radius: 7px; color: #8b949e; font-size: .66rem; font-weight: 600;
+    border-radius: 7px; color: #8b949e; font-size: .64rem; font-weight: 600;
     cursor: pointer; padding: 5px 2px;
     display: flex; flex-direction: column; align-items: center; gap: 2px;
     transition: all .15s; line-height: 1.2;
   }
-  .view-btn .vicon { font-size: .9rem; }
+  .view-btn .vicon { font-size: .88rem; }
   .view-btn:hover { color: #e6edf3; border-color: #484f58; background: rgba(255,255,255,.07); }
-  .view-btn.active {
-    color: #f47174; border-color: #e74c3c;
-    background: rgba(231,76,60,.15); font-weight: 700;
-  }
+  .view-btn.active { color: #f47174; border-color: #e74c3c; background: rgba(231,76,60,.15); font-weight: 700; }
 
   /* 圖例 */
-  .panel-legend { padding: 8px 12px 10px; border-top: 1px solid #21262d; }
-  .legend-title { font-size: .66rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
-  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: .7rem; color: #8b949e; }
+  .panel-legend { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
+  .legend-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
+  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: .68rem; color: #8b949e; }
   .legend-row:last-child { margin-bottom: 0; }
   .legend-swatch {
     border-radius: 50%; flex-shrink: 0;
-    border: 1.5px solid rgba(255,255,255,.35);
+    border: 1.5px solid rgba(255,255,255,.3);
     display: flex; align-items: center; justify-content: center;
-    font-size: .52rem; font-weight: 700; color: #fff;
+    font-size: .5rem; font-weight: 700; color: #fff;
   }
   .panel-legend.hidden { display: none; }
 
@@ -122,37 +149,6 @@
   }
   .icon-btn:hover { background: rgba(231,76,60,.25); border-color: #484f58; }
   .icon-btn.refresh:hover { background: rgba(46,204,113,.18); }
-
-  /* ── 時段選擇面板（底部）── */
-  .slot-panel {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    z-index: 10; padding: 0 10px 10px;
-  }
-  .slot-panel-inner {
-    background: rgba(13,17,23,.93); backdrop-filter: blur(16px);
-    border: 1px solid #30363d; border-radius: 14px;
-    padding: 8px 8px 8px;
-  }
-  .slot-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 6px; padding: 0 2px;
-  }
-  .slot-header-title { font-size: .68rem; font-weight: 600; color: #6e7681; text-transform: uppercase; letter-spacing: .5px; }
-  .slot-current-label { font-size: .68rem; color: #f47174; font-weight: 600; }
-  .slot-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-  .slot-btn {
-    background: rgba(255,255,255,.04); border: 1px solid #30363d; border-radius: 7px;
-    color: #8b949e; font-size: .62rem; padding: 5px 2px; cursor: pointer;
-    transition: all .15s; text-align: center; line-height: 1.3;
-  }
-  .slot-btn:hover { background: rgba(231,76,60,.18); border-color: #e74c3c; color: #f47174; }
-  .slot-btn.active {
-    background: linear-gradient(135deg, #e74c3c, #c0392b); border-color: #e74c3c;
-    color: #fff; font-weight: 700; box-shadow: 0 2px 6px rgba(231,76,60,.35);
-  }
-  .slot-btn.has-data { border-color: rgba(244,113,116,.35); }
-  .slot-btn .slot-count { display: block; font-size: .56rem; opacity: .65; margin-top: 1px; }
-  .slot-btn-all { font-size: .66rem; font-weight: 600; }
 
   /* ── Popup ── */
   .maplibregl-popup-content {
@@ -188,7 +184,6 @@
 </head>
 <body>
 
-<!-- Header（壓縮單行）-->
 <div class="header">
   <div class="header-left">
     <div class="header-icon">🚭</div>
@@ -198,17 +193,25 @@
   <a class="report-btn" id="report-link" href="#" target="_blank">📍 通報</a>
 </div>
 
-<!-- 地圖 -->
 <div id="map">
 
-  <!-- 左側控制面板（統計 + 視圖切換 + 圖例）-->
+  <!-- 左側控制面板 -->
   <div class="left-panel">
 
-    <!-- 統計 -->
-    <div class="panel-stats">
-      <div class="stat-row"><span>顯示點位</span><span class="stat-num" id="stat-visible">—</span></div>
-      <div class="stat-row"><span>總回報數</span><span class="stat-num" id="stat-total">—</span></div>
-      <div class="stat-row"><span>最熱時段</span><span class="stat-num" id="stat-peak">—</span></div>
+    <!-- 統計圓圈 -->
+    <div class="stat-circles">
+      <div class="stat-circle">
+        <div class="stat-ring stat-ring-visible" id="stat-visible">—</div>
+        <div class="stat-label">顯示<br>點位</div>
+      </div>
+      <div class="stat-circle">
+        <div class="stat-ring stat-ring-total" id="stat-total">—</div>
+        <div class="stat-label">總回<br>報數</div>
+      </div>
+      <div class="stat-circle">
+        <div class="stat-ring stat-ring-peak" id="stat-peak">—</div>
+        <div class="stat-label">最熱<br>時段</div>
+      </div>
     </div>
 
     <!-- 資料來源 -->
@@ -216,37 +219,27 @@
       <div class="dot"></div><span id="data-source-text">載入中…</span>
     </div>
 
-    <!-- 視圖切換（三個按鈕橫排）-->
+    <!-- 視圖切換 -->
     <div class="panel-view">
-      <button class="view-btn active" id="btn-cluster">
-        <span class="vicon">🔵</span>分群
-      </button>
-      <button class="view-btn" id="btn-heatmap">
-        <span class="vicon">🔥</span>熱力
-      </button>
-      <button class="view-btn" id="btn-points">
-        <span class="vicon">⚪</span>點位
-      </button>
+      <button class="view-btn active" id="btn-cluster"><span class="vicon">🔵</span>分群</button>
+      <button class="view-btn" id="btn-heatmap"><span class="vicon">🔥</span>熱力</button>
+      <button class="view-btn" id="btn-points"><span class="vicon">⚪</span>點位</button>
     </div>
 
     <!-- 圖例（分群模式）-->
     <div class="panel-legend" id="legend-cluster">
       <div class="legend-title">群組大小</div>
       <div class="legend-row">
-        <div class="legend-swatch" style="background:#2ecc71; width:14px; height:14px;"></div>
-        <span>1–4 筆</span>
+        <div class="legend-swatch" style="background:#2ecc71; width:13px; height:13px;"></div><span>1–4 筆</span>
       </div>
       <div class="legend-row">
-        <div class="legend-swatch" style="background:#f1c40f; width:18px; height:18px;">5</div>
-        <span>5–14 筆</span>
+        <div class="legend-swatch" style="background:#f1c40f; width:17px; height:17px;">5</div><span>5–14 筆</span>
       </div>
       <div class="legend-row">
-        <div class="legend-swatch" style="background:#e67e22; width:22px; height:22px;">15</div>
-        <span>15–29 筆</span>
+        <div class="legend-swatch" style="background:#e67e22; width:21px; height:21px;">15</div><span>15–29 筆</span>
       </div>
       <div class="legend-row">
-        <div class="legend-swatch" style="background:#e74c3c; width:26px; height:26px;">30</div>
-        <span>30 筆以上</span>
+        <div class="legend-swatch" style="background:#e74c3c; width:25px; height:25px;">30</div><span>30 筆以上</span>
       </div>
     </div>
 
@@ -259,7 +252,7 @@
       <div class="legend-row"><div class="legend-swatch" style="background:#f87171; width:11px; height:11px;"></div><span>16–24 時</span></div>
     </div>
 
-  </div><!-- /left-panel -->
+  </div>
 
   <!-- 右側圖示按鈕 -->
   <div class="right-btns">
@@ -267,19 +260,8 @@
     <button class="icon-btn refresh" id="refresh-btn" title="重新載入">🔄</button>
   </div>
 
-  <!-- 時段選擇面板 -->
-  <div class="slot-panel">
-    <div class="slot-panel-inner">
-      <div class="slot-header">
-        <span class="slot-header-title">⏱ 時段篩選</span>
-        <span class="slot-current-label" id="slot-current-label"></span>
-      </div>
-      <div class="slot-grid" id="slot-grid"></div>
-    </div>
-  </div>
-
   <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
-</div><!-- /map -->
+</div>
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
 <script>
@@ -295,7 +277,6 @@ var SLOT_COLORS = [
 ];
 
 var allFeatures = [];
-var currentSlot = 'all';
 var viewMode = 'cluster';
 var map;
 
@@ -308,12 +289,7 @@ map = new maplibregl.Map({
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
-map.on('load', function() {
-  initLayers();
-  loadData();
-  updateCurrentSlotLabel();
-  setInterval(updateCurrentSlotLabel, 60000);
-});
+map.on('load', function() { initLayers(); loadData(); });
 
 function initLayers() {
   map.addSource('reports', {
@@ -331,7 +307,6 @@ function initLayers() {
     data: { type: 'FeatureCollection', features: [] }
   });
 
-  // 熱力圖層
   map.addLayer({
     id: 'layer-heatmap', type: 'heatmap', source: 'reports-heat',
     layout: { visibility: 'none' },
@@ -352,7 +327,6 @@ function initLayers() {
     }
   });
 
-  // 分群圓圈
   map.addLayer({
     id: 'layer-clusters', type: 'circle', source: 'reports',
     filter: ['has', 'point_count'],
@@ -367,7 +341,6 @@ function initLayers() {
     }
   });
 
-  // 分群數字標籤
   map.addLayer({
     id: 'layer-cluster-count', type: 'symbol', source: 'reports',
     filter: ['has', 'point_count'],
@@ -381,7 +354,6 @@ function initLayers() {
     paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,.25)', 'text-halo-width': 1 }
   });
 
-  // 個別點位光暈
   map.addLayer({
     id: 'layer-halo', type: 'circle', source: 'reports',
     filter: ['!', ['has', 'point_count']],
@@ -392,7 +364,6 @@ function initLayers() {
     }
   });
 
-  // 個別點位
   map.addLayer({
     id: 'layer-points', type: 'circle', source: 'reports',
     filter: ['!', ['has', 'point_count']],
@@ -411,7 +382,6 @@ function initLayers() {
     }
   });
 
-  // 點擊群組 → 縮放展開
   map.on('click', 'layer-clusters', function(e) {
     var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
     map.getSource('reports').getClusterExpansionZoom(feature.properties.cluster_id, function(err, zoom) {
@@ -420,7 +390,6 @@ function initLayers() {
     });
   });
 
-  // 點擊個別點位 → Popup
   map.on('click', 'layer-points', function(e) {
     var props = e.features[0].properties;
     var coords = e.features[0].geometry.coordinates.slice();
@@ -446,7 +415,6 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── 視圖切換 ──
 var LAYER_VIS = {
   cluster: { 'layer-heatmap': 'none',    'layer-clusters': 'visible', 'layer-cluster-count': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible' },
   heatmap: { 'layer-heatmap': 'visible', 'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none'    },
@@ -470,7 +438,6 @@ document.getElementById('btn-cluster').addEventListener('click', function() { se
 document.getElementById('btn-heatmap').addEventListener('click', function() { setViewMode('heatmap'); });
 document.getElementById('btn-points').addEventListener('click',  function() { setViewMode('points'); });
 
-// ── 資料標記 ──
 function setDataSource(type, text) {
   var badge = document.getElementById('data-source-badge');
   badge.className = 'data-source-badge ' + type;
@@ -495,13 +462,26 @@ function normalizeFeatures(features) {
   });
 }
 
+function updateStats(features) {
+  document.getElementById('stat-visible').textContent = features.length;
+  document.getElementById('stat-total').textContent   = allFeatures.length;
+  if (allFeatures.length > 0) {
+    var counts = new Array(12).fill(0);
+    allFeatures.forEach(function(f) {
+      var s = parseInt(f.properties.time_slot);
+      if (s >= 0 && s < 12) counts[s]++;
+    });
+    var peak = counts.indexOf(Math.max.apply(null, counts));
+    document.getElementById('stat-peak').textContent = SLOT_LABELS[peak];
+  }
+}
+
 function applyData(features) {
   allFeatures = features;
   var fc = { type: 'FeatureCollection', features: features };
   if (map.getSource('reports'))      map.getSource('reports').setData(fc);
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
-  buildSlotButtons();
-  filterAndRender(currentSlot);
+  updateStats(features);
   document.getElementById('loading').classList.add('hidden');
 }
 
@@ -530,62 +510,6 @@ function loadData() {
           console.error(e);
         });
     });
-}
-
-// ── 時段按鈕 ──
-function buildSlotButtons() {
-  var slotCounts = new Array(12).fill(0);
-  allFeatures.forEach(function(f) {
-    var s = parseInt(f.properties.time_slot);
-    if (s >= 0 && s < 12) slotCounts[s]++;
-  });
-  var grid = document.getElementById('slot-grid');
-  grid.innerHTML = '';
-
-  var allBtn = document.createElement('button');
-  allBtn.className = 'slot-btn slot-btn-all' + (currentSlot === 'all' ? ' active' : '');
-  allBtn.dataset.slot = 'all';
-  allBtn.innerHTML = '全部<span class="slot-count">' + allFeatures.length + '</span>';
-  allBtn.onclick = function() { selectSlot('all'); };
-  grid.appendChild(allBtn);
-
-  SLOT_LABELS.forEach(function(label, i) {
-    var btn = document.createElement('button');
-    var hasData = slotCounts[i] > 0;
-    btn.className = 'slot-btn' + (currentSlot === String(i) ? ' active' : '') + (hasData ? ' has-data' : '');
-    btn.dataset.slot = String(i);
-    btn.innerHTML = label + '<span class="slot-count">' + (hasData ? slotCounts[i] : '–') + '</span>';
-    btn.onclick = function() { selectSlot(String(i)); };
-    grid.appendChild(btn);
-  });
-}
-
-function selectSlot(slot) {
-  currentSlot = slot;
-  document.querySelectorAll('.slot-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.slot === slot); });
-  filterAndRender(slot);
-}
-
-function filterAndRender(slot) {
-  var filtered = slot === 'all'
-    ? allFeatures
-    : allFeatures.filter(function(f) { return String(f.properties.time_slot) === slot; });
-  var fc = { type: 'FeatureCollection', features: filtered };
-  if (map.getSource('reports'))      map.getSource('reports').setData(fc);
-  if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
-  document.getElementById('stat-visible').textContent = filtered.length;
-  document.getElementById('stat-total').textContent   = allFeatures.length;
-  if (allFeatures.length > 0) {
-    var counts = new Array(12).fill(0);
-    allFeatures.forEach(function(f) { var s = parseInt(f.properties.time_slot); if (s >= 0 && s < 12) counts[s]++; });
-    var peak = counts.indexOf(Math.max.apply(null, counts));
-    document.getElementById('stat-peak').textContent = SLOT_LABELS[peak];
-  }
-}
-
-function updateCurrentSlotLabel() {
-  var slot = Math.floor(new Date().getHours() / 2);
-  document.getElementById('slot-current-label').textContent = '目前時段：' + SLOT_LABELS[slot];
 }
 
 document.getElementById('locate-btn').addEventListener('click', function() {

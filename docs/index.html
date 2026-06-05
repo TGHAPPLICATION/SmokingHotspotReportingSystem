@@ -307,6 +307,14 @@ var allFeatures = [];
 var viewMode = 'cluster';
 var map;
 
+// setZoom(同值) 會被 MapLibre 優化成 no-op，微小 bump 強迫 clustered tiles 重算
+function forceClusterRepaint() {
+  if (!map) return;
+  var z = map.getZoom();
+  map.setZoom(z + 0.0001);
+  requestAnimationFrame(function() { map.setZoom(z); });
+}
+
 // 時段 band 對應的 time_slot 範圍（0–11 共 12 個 2 小時時段）
 var SLOT_BANDS = [
   { slots: [0, 1],        label: '00–04 時' },
@@ -493,15 +501,10 @@ function initLayers() {
   });
 
   // clustered source 在 Web Worker 非同步計算 tiles；
-  // 用 once('idle') 確保 tiles 計算完成後再強迫重繪一次
-  var _clusterNeedsRepaint = false;
+  // source 重新載入完成後 bump zoom 強迫 tile 重算
   map.on('sourcedata', function(e) {
-    if (e.sourceId === 'reports' && e.isSourceLoaded && !_clusterNeedsRepaint) {
-      _clusterNeedsRepaint = true;
-      map.once('idle', function() {
-        _clusterNeedsRepaint = false;
-        map.setZoom(map.getZoom());
-      });
+    if (e.sourceId === 'reports' && e.isSourceLoaded) {
+      forceClusterRepaint();
     }
   });
 }
@@ -613,8 +616,8 @@ function applyFilter() {
   if (map.getSource('reports'))      map.getSource('reports').setData(fc);
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);
-  // setData 後 cluster tiles 需一點時間重算，idle 後再觸發一次 zoom 強制渲染
-  map.once('idle', function() { map.setZoom(map.getZoom()); });
+  // setData 後給 Web Worker 100ms 重算 cluster tiles，再強迫 zoom bump
+  setTimeout(forceClusterRepaint, 100);
 }
 
 function updateSlotBandUI() {

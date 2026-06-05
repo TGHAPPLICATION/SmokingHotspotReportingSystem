@@ -321,25 +321,23 @@ function geocodeAddress() {
   btn.disabled = true;
   btn.textContent = '查詢中…';
 
-  var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=tw&q='
-    + encodeURIComponent(addr);
-
-  fetch(url, { headers: { 'Accept-Language': 'zh-TW' } })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
+  // 透過 Apps Script 後端呼叫 Google Maps Geocoding（不需 API Key）
+  google.script.run
+    .withSuccessHandler(function(result) {
       btn.textContent = '查詢地址座標';
       btn.disabled = false;
-      if (!data || data.length === 0) {
+      if (!result || !result.success) {
         showMsg('找不到此地址，請嘗試更詳細的地址。', 'error');
         return;
       }
-      setLocation(parseFloat(data[0].lat), parseFloat(data[0].lon), 'manual');
+      setLocation(result.lat, result.lng, 'manual');
     })
-    .catch(function() {
+    .withFailureHandler(function() {
       btn.textContent = '查詢地址座標';
       btn.disabled = false;
-      showMsg('地址查詢失敗，請確認網路連線或手動輸入更精確的地址。', 'error');
-    });
+      showMsg('地址查詢失敗，請稍後再試。', 'error');
+    })
+    .geocodeAddressServer(addr);
 }
 
 // ── 設定位置 & 地圖預覽 ───────────────────────────────────────

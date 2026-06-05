@@ -113,28 +113,75 @@ time_slot = Math.floor(hour / 2)
 ### 5.1 地圖元件
 
 - **底圖**：OpenFreeMap liberty 樣式（免費、無需 API Key）
-- **熱點圖層**：MapLibre GL JS 的 `circle` 圖層
-  - 顏色：依點位數量熱力色 (yellow → orange → red)
-  - 大小：依縮放層級動態調整
-  - 動畫效果：脈衝圓圈（CSS animation）
-- **時段切換**：底部浮動按鈕列（12 個時段 + 全部）
+- **三種視覺化模式**（可即時切換）：
+  - 🔵 **分群模式（預設）**：supercluster 動態聚合，依數量顯示圓圈大小與顏色深淺
+  - 🔥 **熱力模式**：WebGL heatmap，密度梯度呈現空間分布
+  - ⚪ **點位模式**：所有個別點位，依時段上色
 
-### 5.2 地圖互動功能
+### 5.2 分群演算法設計（supercluster，MapLibre 內建）
 
-- 點擊點位：顯示 popup（回報時間、地址）
-- 時段篩選：點選時段按鈕，地圖即時過濾資料
-- 縮放/平移：標準地圖操作
+| 參數 | 設定值 | 說明 |
+|------|--------|------|
+| `cluster` | `true` | 啟用分群 |
+| `clusterMaxZoom` | 15 | zoom ≤ 15 才合併；zoom 16+ 顯示個別點位 |
+| `clusterRadius` | 50 px | 同一螢幕半徑 50px 內的點位合併 |
+| `clusterProperties` | `max_slot`, `min_slot` | 彙整群內時段範圍，供後續擴充使用 |
+
+**分群圓圈顏色與大小（依 point_count 四段）：**
+
+| 數量 | 顏色 | 圓圈直徑 |
+|------|------|---------|
+| 1–4 | 綠 `#2ecc71` | 40 px |
+| 5–14 | 黃 `#f1c40f` | 56 px |
+| 15–29 | 橘 `#e67e22` | 72 px |
+| 30+ | 紅 `#e74c3c` | 88 px |
+
+- 數量越多，圓圈越大、顏色越深（綠→黃→橘→紅）
+- 點擊群組 → `getClusterExpansionZoom` 自動計算下一展開縮放，平滑飛往
+- 縮放時由 MapLibre 自動重新計算分群，無需手動監聽 zoom 事件
+
+### 5.3 熱力圖設計
+
+- 使用獨立的 raw source（`reports-heat`，不分群），確保熱力分布準確
+- `heatmap-intensity` 隨縮放增強（zoom 10 → 1x, zoom 15 → 3x）
+- `heatmap-radius` 隨縮放增大（zoom 10 → 15 px, zoom 15 → 35 px）
+- 色階：透明（低密度）→ 藍 → 橘 → 紅（高密度）
+
+### 5.4 圖層架構
+
+```
+reports source (cluster: true)
+  ├── layer-clusters       → 分群圓圈（has point_count）
+  ├── layer-cluster-count  → 分群數字標籤
+  ├── layer-pulse          → 個別點位脈衝外圈（!has point_count）
+  └── layer-points         → 個別點位（!has point_count）
+
+reports-heat source (cluster: false)
+  └── layer-heatmap        → WebGL 熱力圖
+```
+
+### 5.5 地圖互動功能
+
+- **分群模式**：點擊群組 → 縮放展開；點擊個別點位 → popup
+- **熱力模式**：純視覺化，無點擊互動
+- **點位模式**：點擊個別點位 → popup（含時段、地址、說明、時間）
+- 時段篩選：三種模式均支援，切換時同步更新兩個 source 的資料
 - 定位按鈕：移至使用者目前位置
+- 圖例：分群模式顯示數量色階，點位模式顯示時段色階
 
-### 5.3 資料流
+### 5.6 資料流
 
 ```
 頁面載入
    │
    └── fetch(API_URL + "?action=getReports")
           │
-          ├── 成功 → 解析 GeoJSON → 渲染圖層
+          ├── 成功 → 解析 GeoJSON → normalizeFeatures
           └── 失敗 → 使用 api-mock.json 示範資料
+                │
+                └── setData(reports + reports-heat)
+                       │
+                       └── MapLibre 自動渲染所有已啟用圖層
 ```
 
 ---
@@ -190,6 +237,8 @@ Google Sheets 權限設定：
 | 面向 | 現行設計 | 未來擴充 |
 |------|----------|----------|
 | 資料量 | Google Sheets（最多 1000 萬格） | 超過 10 萬筆可遷移至 Firebase |
-| 地圖效能 | 直接渲染所有點位 | 超過 5000 點可加入 clustering |
+| 地圖效能 | supercluster 分群 + 熱力圖 | 超過 5 萬點可調低 clusterMaxZoom |
 | 通知 | 無 | 可加入 Line Notify 推播 |
 | 後台 | 無 | 可加入 Looker Studio 儀表板 |
+| 分群色彩 | 依數量四段 | 可改為依群內主要時段上色（需擴充 clusterProperties） |
+| 動畫 | 脈衝外圈（個別點位） | 可加入群組 expand 動畫 |

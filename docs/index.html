@@ -291,6 +291,7 @@
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
 <script>
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
@@ -307,12 +308,21 @@ var allFeatures = [];
 var viewMode = 'cluster';
 var map;
 
-// setZoom(同值) 會被 MapLibre 優化成 no-op，微小 bump 強迫 clustered tiles 重算
-function forceClusterRepaint() {
-  if (!map) return;
-  var z = map.getZoom();
-  map.setZoom(z + 0.0001);
-  requestAnimationFrame(function() { map.setZoom(z); });
+var sc = null; // supercluster 實例
+
+function buildSupercluster(features) {
+  sc = new Supercluster({ radius: 50, maxZoom: 15 });
+  sc.load(features);
+}
+
+function updateClusters() {
+  if (!sc || !map.getSource('reports')) return;
+  if (viewMode !== 'cluster') return;
+  var bounds = map.getBounds();
+  var zoom = Math.floor(map.getZoom());
+  var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+  var clusters = sc.getClusters(bbox, zoom);
+  map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
 }
 
 // 時段 band 對應的 time_slot 範圍（0–11 共 12 個 2 小時時段）
@@ -339,12 +349,7 @@ map.on('load', function() { initLayers(); loadData(); });
 function initLayers() {
   map.addSource('reports', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-    cluster: true, clusterMaxZoom: 15, clusterRadius: 50,
-    clusterProperties: {
-      'max_slot': ['max', ['get', 'time_slot']],
-      'min_slot': ['min', ['get', 'time_slot']]
-    }
+    data: { type: 'FeatureCollection', features: [] }
   });
 
   map.addSource('reports-heat', {
@@ -408,7 +413,10 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: {
       visibility: 'visible',
-      'text-field': '{point_count_abbreviated}',
+      'text-field': ['case', ['>=', ['get', 'point_count'], 1000],
+        ['concat', ['to-string', ['floor', ['/', ['get', 'point_count'], 1000]]], 'k'],
+        ['to-string', ['get', 'point_count']]
+      ],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
       'text-size': ['step', ['get', 'point_count'], 12, 15, 13, 30, 15],
       'text-allow-overlap': true
@@ -471,10 +479,10 @@ function initLayers() {
   // ── 互動事件 ──
   map.on('click', 'layer-clusters', function(e) {
     var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
-    map.getSource('reports').getClusterExpansionZoom(feature.properties.cluster_id, function(err, zoom) {
-      if (err) return;
-      map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
-    });
+    if (!feature || !sc) return;
+    var clusterId = feature.properties.cluster_id;
+    var zoom = sc.getClusterExpansionZoom(clusterId);
+    map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
   });
 
   function showPointPopup(e) {
@@ -500,13 +508,9 @@ function initLayers() {
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
-  // clustered source 在 Web Worker 非同步計算 tiles；
-  // source 重新載入完成後 bump zoom 強迫 tile 重算
-  map.on('sourcedata', function(e) {
-    if (e.sourceId === 'reports' && e.isSourceLoaded) {
-      forceClusterRepaint();
-    }
-  });
+  // 地圖移動/縮放時重算群組
+  map.on('moveend', updateClusters);
+  map.on('zoomend', updateClusters);
 }
 
 function esc(s) {
@@ -530,8 +534,7 @@ function setViewMode(mode) {
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
-  // 切換模式時同樣強迫重新請求 clustered tiles
-  map.setZoom(map.getZoom());
+  if (mode === 'cluster') updateClusters();
 }
 
 document.getElementById('btn-cluster').addEventListener('click', function() { setViewMode('cluster'); });
@@ -613,11 +616,12 @@ function getFilteredFeatures() {
 function applyFilter() {
   var filtered = getFilteredFeatures();
   var fc = { type: 'FeatureCollection', features: filtered };
-  if (map.getSource('reports'))      map.getSource('reports').setData(fc);
+  // 重建 supercluster（cluster 模式用）
+  buildSupercluster(filtered);
+  updateClusters();
+  // reports-heat 直接放全部原始點（heatmap / points 模式用）
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);
-  // setData 後給 Web Worker 100ms 重算 cluster tiles，再強迫 zoom bump
-  setTimeout(forceClusterRepaint, 100);
 }
 
 function updateSlotBandUI() {

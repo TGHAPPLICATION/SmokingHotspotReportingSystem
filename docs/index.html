@@ -134,7 +134,37 @@
   }
   .panel-legend.hidden { display: none; }
 
-  /* 時段篩選列 */
+  /* 月份滑桿 */
+  .month-filter { padding: 8px 10px 10px; border-top: 1px solid #21262d; }
+  .month-filter-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .month-label { font-size: .72rem; font-weight: 700; color: #e6edf3; text-align: center; margin-bottom: 5px; }
+  .month-nav { display: flex; align-items: center; gap: 5px; }
+  .month-nav-btn {
+    background: rgba(255,255,255,.06); border: 1px solid #30363d;
+    border-radius: 5px; color: #8b949e; font-size: .7rem;
+    cursor: pointer; padding: 2px 7px; transition: all .15s; flex-shrink: 0;
+  }
+  .month-nav-btn:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #e6edf3; }
+  .month-nav-btn:disabled { opacity: .3; cursor: default; }
+  .month-slider-wrap { position: relative; padding: 4px 0 2px; }
+  input[type=range].month-slider {
+    -webkit-appearance: none; width: 100%; height: 3px;
+    background: #30363d; border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range].month-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: #e74c3c; border: 2px solid #fff;
+    cursor: pointer; transition: transform .1s;
+  }
+  input[type=range].month-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .month-all-btn {
+    width: 100%; margin-top: 6px;
+    background: rgba(255,255,255,.04); border: 1px solid #30363d;
+    border-radius: 5px; color: #6e7681; font-size: .63rem;
+    cursor: pointer; padding: 4px; transition: all .15s;
+  }
+  .month-all-btn:hover { background: rgba(255,255,255,.09); color: #e6edf3; }
+  .month-all-btn.active { background: rgba(96,165,250,.12); border-color: #60a5fa; color: #60a5fa; }
   .slot-filter { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
   .slot-filter-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
   .slot-filter-clear { font-size: .6rem; font-weight: 400; color: #484f58; cursor: pointer; text-transform: none; letter-spacing: 0; }
@@ -270,6 +300,20 @@
       <div class="legend-row"><div class="legend-swatch" style="background:#f87171; width:11px; height:11px;"></div><span>16–24 時</span></div>
     </div>
 
+    <!-- 月份滑桿 -->
+    <div class="month-filter" id="month-filter">
+      <div class="month-filter-title">月份篩選</div>
+      <div class="month-label" id="month-label">全部時間</div>
+      <div class="month-slider-wrap">
+        <input type="range" class="month-slider" id="month-slider" min="0" max="0" value="0" step="1">
+      </div>
+      <div class="month-nav">
+        <button class="month-nav-btn" id="month-prev">◀</button>
+        <button class="month-all-btn active" id="month-all">全部時間</button>
+        <button class="month-nav-btn" id="month-next">▶</button>
+      </div>
+    </div>
+
     <!-- 時段篩選（所有模式共用）-->
     <div class="slot-filter" id="slot-filter">
       <div class="slot-filter-title">通報時段 <span class="slot-filter-clear" id="slot-clear">全選</span></div>
@@ -306,6 +350,8 @@ var SLOT_COLORS = [
 
 var allFeatures = [];
 var viewMode = 'cluster';
+var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
+var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
 var sc = null; // supercluster 實例
@@ -608,17 +654,88 @@ function updateStats(filtered) {
   }
 }
 
+function featureMonth(f) {
+  var ts = f.properties.timestamp;
+  if (!ts) return null;
+  var d = new Date(ts);
+  if (isNaN(d)) return null;
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
 function getFilteredFeatures() {
-  // 計算所有選取 band 對應的 time_slot 集合
+  // 月份篩選
+  var base = allFeatures;
+  if (selectedMonth) {
+    base = allFeatures.filter(function(f) { return featureMonth(f) === selectedMonth; });
+  }
+  // 時段 band 篩選
   var allowedSlots = new Set();
   activeBands.forEach(function(b) {
     SLOT_BANDS[b].slots.forEach(function(s) { allowedSlots.add(s); });
   });
-  if (allowedSlots.size === 12) return allFeatures; // 全選，直接回傳
-  return allFeatures.filter(function(f) {
+  if (allowedSlots.size === 12) return base;
+  return base.filter(function(f) {
     return allowedSlots.has(parseInt(f.properties.time_slot));
   });
 }
+
+function initMonthSlider() {
+  // 從 allFeatures 提取所有月份並排序
+  var monthSet = {};
+  allFeatures.forEach(function(f) {
+    var m = featureMonth(f);
+    if (m) monthSet[m] = true;
+  });
+  availableMonths = Object.keys(monthSet).sort();
+  if (availableMonths.length === 0) return;
+
+  var slider = document.getElementById('month-slider');
+  // 0 = 全部時間，1..n = 月份索引
+  slider.min = 0;
+  slider.max = availableMonths.length;
+  slider.value = 0;
+  updateMonthUI();
+}
+
+function updateMonthUI() {
+  var slider = document.getElementById('month-slider');
+  var idx = parseInt(slider.value);
+  var allBtn = document.getElementById('month-all');
+  var label = document.getElementById('month-label');
+  var prevBtn = document.getElementById('month-prev');
+  var nextBtn = document.getElementById('month-next');
+
+  if (idx === 0) {
+    selectedMonth = null;
+    label.textContent = '全部時間';
+    allBtn.classList.add('active');
+  } else {
+    selectedMonth = availableMonths[idx - 1];
+    label.textContent = selectedMonth.replace('-', ' 年 ') + ' 月';
+    allBtn.classList.remove('active');
+  }
+  prevBtn.disabled = idx === 0;
+  nextBtn.disabled = idx === availableMonths.length;
+}
+
+document.getElementById('month-slider').addEventListener('input', function() {
+  updateMonthUI();
+  applyFilter();
+});
+document.getElementById('month-prev').addEventListener('click', function() {
+  var slider = document.getElementById('month-slider');
+  if (parseInt(slider.value) > 0) { slider.value--; updateMonthUI(); applyFilter(); }
+});
+document.getElementById('month-next').addEventListener('click', function() {
+  var slider = document.getElementById('month-slider');
+  if (parseInt(slider.value) < availableMonths.length) { slider.value++; updateMonthUI(); applyFilter(); }
+});
+document.getElementById('month-all').addEventListener('click', function() {
+  var slider = document.getElementById('month-slider');
+  slider.value = 0;
+  updateMonthUI();
+  applyFilter();
+});
 
 function applyFilter() {
   var filtered = getFilteredFeatures();
@@ -653,6 +770,7 @@ function updateSlotBandUI() {
 
 function applyData(features) {
   allFeatures = features;
+  initMonthSlider();
   updateSlotBandUI();
   applyFilter();
   document.getElementById('loading').classList.add('hidden');

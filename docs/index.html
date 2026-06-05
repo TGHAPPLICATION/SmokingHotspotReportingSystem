@@ -493,10 +493,15 @@ function initLayers() {
   });
 
   // clustered source 在 Web Worker 非同步計算 tiles；
-  // 每次 source 重新載入完成就觸發 repaint，確保切換模式或首次載入不需 zoom 才顯示
+  // 用 once('idle') 確保 tiles 計算完成後再強迫重繪一次
+  var _clusterNeedsRepaint = false;
   map.on('sourcedata', function(e) {
-    if (e.sourceId === 'reports' && e.isSourceLoaded) {
-      map.triggerRepaint();
+    if (e.sourceId === 'reports' && e.isSourceLoaded && !_clusterNeedsRepaint) {
+      _clusterNeedsRepaint = true;
+      map.once('idle', function() {
+        _clusterNeedsRepaint = false;
+        map.setZoom(map.getZoom());
+      });
     }
   });
 }
@@ -608,7 +613,8 @@ function applyFilter() {
   if (map.getSource('reports'))      map.getSource('reports').setData(fc);
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);
-  map.setZoom(map.getZoom());
+  // setData 後 cluster tiles 需一點時間重算，idle 後再觸發一次 zoom 強制渲染
+  map.once('idle', function() { map.setZoom(map.getZoom()); });
 }
 
 function updateSlotBandUI() {

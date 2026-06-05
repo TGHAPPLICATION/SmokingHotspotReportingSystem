@@ -311,18 +311,39 @@ var map;
 var sc = null; // supercluster 實例
 
 function buildSupercluster(features) {
-  sc = new Supercluster({ radius: 50, maxZoom: 15 });
-  sc.load(features);
+  try {
+    sc = new Supercluster({ radius: 50, maxZoom: 15 });
+    sc.load(features);
+    console.log('[cluster] supercluster loaded', features.length, 'features');
+  } catch(e) {
+    console.error('[cluster] buildSupercluster failed', e);
+    sc = null;
+  }
+}
+
+function abbrev(n) {
+  return n >= 1000 ? Math.floor(n / 1000) + 'k' : String(n);
 }
 
 function updateClusters() {
-  if (!sc || !map.getSource('reports')) return;
+  if (!sc || !map || !map.getSource('reports')) return;
   if (viewMode !== 'cluster') return;
-  var bounds = map.getBounds();
-  var zoom = Math.floor(map.getZoom());
-  var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-  var clusters = sc.getClusters(bbox, zoom);
-  map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
+  try {
+    var bounds = map.getBounds();
+    var zoom = Math.floor(map.getZoom());
+    var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    var clusters = sc.getClusters(bbox, zoom);
+    // 預先寫入 label 字串，避免在 MapLibre expression 裡做複雜運算
+    clusters.forEach(function(f) {
+      if (f.properties.point_count) {
+        f.properties.point_count_label = abbrev(f.properties.point_count);
+      }
+    });
+    map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
+    console.log('[cluster] updateClusters zoom=' + zoom + ' clusters=' + clusters.length);
+  } catch(e) {
+    console.error('[cluster] updateClusters failed', e);
+  }
 }
 
 // 時段 band 對應的 time_slot 範圍（0–11 共 12 個 2 小時時段）
@@ -344,7 +365,10 @@ map = new maplibregl.Map({
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
-map.on('load', function() { initLayers(); loadData(); });
+map.on('load', function() {
+  try { initLayers(); } catch(e) { console.error('[initLayers] FAILED:', e); }
+  loadData();
+});
 
 function initLayers() {
   map.addSource('reports', {
@@ -413,10 +437,7 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: {
       visibility: 'visible',
-      'text-field': ['case', ['>=', ['get', 'point_count'], 1000],
-        ['concat', ['to-string', ['floor', ['/', ['get', 'point_count'], 1000]]], 'k'],
-        ['to-string', ['get', 'point_count']]
-      ],
+      'text-field': ['coalesce', ['get', 'point_count_label'], ''],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
       'text-size': ['step', ['get', 'point_count'], 12, 15, 13, 30, 15],
       'text-allow-overlap': true

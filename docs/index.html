@@ -330,34 +330,35 @@ function initLayers() {
     }
   });
 
-  // 外暈光環（比主圓大一圈，隨數量擴張）
+  // ── 分群模式圖層（source: reports，有 cluster） ──
+
+  // 分群外暈光環
   map.addLayer({
     id: 'layer-cluster-glow', type: 'circle', source: 'reports',
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
       'circle-color': ['step', ['get', 'point_count'], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
-      'circle-radius': ['step', ['get', 'point_count'], 28, 5, 44, 15, 62, 30, 82],
+      'circle-radius': ['step', ['get', 'point_count'], 22, 5, 34, 15, 48, 30, 62],
       'circle-opacity': ['step', ['get', 'point_count'], 0.12, 5, 0.15, 15, 0.18, 30, 0.22],
-      'circle-blur': 0.7,
-      'circle-stroke-width': 0
+      'circle-blur': 0.65, 'circle-stroke-width': 0
     }
   });
 
+  // 分群主圓
   map.addLayer({
     id: 'layer-clusters', type: 'circle', source: 'reports',
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
       'circle-color': ['step', ['get', 'point_count'], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
-      'circle-radius': ['step', ['get', 'point_count'], 18, 5, 30, 15, 44, 30, 58],
+      'circle-radius': ['step', ['get', 'point_count'], 14, 5, 22, 15, 32, 30, 42],
       'circle-opacity': 0.92,
-      'circle-stroke-width': ['step', ['get', 'point_count'], 2, 5, 2.5, 15, 3, 30, 3.5],
-      'circle-stroke-color': 'rgba(255,255,255,.65)',
-      'circle-blur': 0
+      'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(255,255,255,.65)'
     }
   });
 
+  // 分群數字
   map.addLayer({
     id: 'layer-cluster-count', type: 'symbol', source: 'reports',
     filter: ['has', 'point_count'],
@@ -365,18 +366,19 @@ function initLayers() {
       visibility: 'visible',
       'text-field': '{point_count_abbreviated}',
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-size': ['step', ['get', 'point_count'], 13, 15, 15, 30, 17],
+      'text-size': ['step', ['get', 'point_count'], 12, 15, 13, 30, 15],
       'text-allow-overlap': true
     },
-    paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,.25)', 'text-halo-width': 1 }
+    paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,.3)', 'text-halo-width': 1 }
   });
 
+  // 分群模式：展開後個別點（reports source，filter: !has point_count）
   map.addLayer({
     id: 'layer-halo', type: 'circle', source: 'reports',
     filter: ['!', ['has', 'point_count']],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 14, 14, 26, 18, 38],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 8, 18, 16],
       'circle-color': '#ffffff', 'circle-opacity': 0.18, 'circle-stroke-width': 0
     }
   });
@@ -386,7 +388,7 @@ function initLayers() {
     filter: ['!', ['has', 'point_count']],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 8, 14, 16, 18, 24],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 5, 18, 12],
       'circle-color': [
         'match', ['%', ['coalesce', ['to-number', ['get', 'time_slot']], 0], 12],
         0,  SLOT_COLORS[0],  1,  SLOT_COLORS[1],  2,  SLOT_COLORS[2],  3,  SLOT_COLORS[3],
@@ -394,11 +396,38 @@ function initLayers() {
         8,  SLOT_COLORS[8],  9,  SLOT_COLORS[9],  10, SLOT_COLORS[10], 11, SLOT_COLORS[11],
         '#e74c3c'
       ],
-      'circle-opacity': 0.92, 'circle-stroke-width': 2.5,
-      'circle-stroke-color': '#ffffff', 'circle-stroke-opacity': 0.9
+      'circle-opacity': 0.9, 'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.8
     }
   });
 
+  // ── 點位模式圖層（source: reports-heat，無分群，顯示全部原始點）──
+  map.addLayer({
+    id: 'layer-halo-raw', type: 'circle', source: 'reports-heat',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 9, 18, 16],
+      'circle-color': '#ffffff', 'circle-opacity': 0.15, 'circle-stroke-width': 0
+    }
+  });
+
+  map.addLayer({
+    id: 'layer-points-raw', type: 'circle', source: 'reports-heat',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 11],
+      'circle-color': [
+        'match', ['%', ['coalesce', ['to-number', ['get', 'time_slot']], 0], 12],
+        0,  SLOT_COLORS[0],  1,  SLOT_COLORS[1],  2,  SLOT_COLORS[2],  3,  SLOT_COLORS[3],
+        4,  SLOT_COLORS[4],  5,  SLOT_COLORS[5],  6,  SLOT_COLORS[6],  7,  SLOT_COLORS[7],
+        8,  SLOT_COLORS[8],  9,  SLOT_COLORS[9],  10, SLOT_COLORS[10], 11, SLOT_COLORS[11],
+        '#e74c3c'
+      ],
+      'circle-opacity': 0.75, 'circle-stroke-width': 0
+    }
+  });
+
+  // ── 互動事件 ──
   map.on('click', 'layer-clusters', function(e) {
     var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
     map.getSource('reports').getClusterExpansionZoom(feature.properties.cluster_id, function(err, zoom) {
@@ -407,12 +436,12 @@ function initLayers() {
     });
   });
 
-  map.on('click', 'layer-points', function(e) {
+  function showPointPopup(e) {
     var props = e.features[0].properties;
     var coords = e.features[0].geometry.coordinates.slice();
     var slot = parseInt(props.time_slot) || 0;
     var ts = props.timestamp ? new Date(props.timestamp).toLocaleString('zh-TW') : '';
-    new maplibregl.Popup({ offset: 14, maxWidth: '240px' })
+    new maplibregl.Popup({ offset: 12, maxWidth: '240px' })
       .setLngLat(coords)
       .setHTML(
         '<div class="popup-slot">⏱ ' + SLOT_LABELS[slot] + '</div>' +
@@ -420,9 +449,12 @@ function initLayers() {
         (props.description   ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
         (ts ? '<div class="popup-time">🕐 ' + ts + '</div>' : '')
       ).addTo(map);
-  });
+  }
 
-  ['layer-clusters', 'layer-points'].forEach(function(id) {
+  map.on('click', 'layer-points', showPointPopup);
+  map.on('click', 'layer-points-raw', showPointPopup);
+
+  ['layer-clusters','layer-points','layer-points-raw'].forEach(function(id) {
     map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
@@ -441,9 +473,9 @@ function esc(s) {
 }
 
 var LAYER_VIS = {
-  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-cluster-count': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible' },
-  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none'    },
-  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'visible', 'layer-points': 'visible' }
+  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-cluster-count': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' }
 };
 
 function setViewMode(mode) {

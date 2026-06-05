@@ -134,6 +134,24 @@
   }
   .panel-legend.hidden { display: none; }
 
+  /* 時段篩選列 */
+  .slot-filter { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
+  .slot-filter-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+  .slot-filter-clear { font-size: .6rem; font-weight: 400; color: #484f58; cursor: pointer; text-transform: none; letter-spacing: 0; }
+  .slot-filter-clear:hover { color: #8b949e; }
+  .slot-band {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+    font-size: .68rem; color: #8b949e; cursor: pointer;
+    padding: 2px 4px; border-radius: 4px; user-select: none;
+    transition: background .15s;
+  }
+  .slot-band:last-child { margin-bottom: 0; }
+  .slot-band:hover { background: rgba(255,255,255,.06); }
+  .slot-band.active { color: #e6edf3; background: rgba(255,255,255,.1); }
+  .slot-band.dimmed { opacity: .35; }
+  .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
+
   /* ── 右側圖示按鈕 ── */
   .right-btns {
     position: absolute; top: 10px; right: 10px;
@@ -245,11 +263,20 @@
 
     <!-- 圖例（點位模式）-->
     <div class="panel-legend hidden" id="legend-points">
-      <div class="legend-title">通報時段</div>
+      <div class="legend-title">點位色階</div>
       <div class="legend-row"><div class="legend-swatch" style="background:#60a5fa; width:11px; height:11px;"></div><span>00–04 時</span></div>
       <div class="legend-row"><div class="legend-swatch" style="background:#34d399; width:11px; height:11px;"></div><span>04–10 時</span></div>
       <div class="legend-row"><div class="legend-swatch" style="background:#facc15; width:11px; height:11px;"></div><span>10–16 時</span></div>
       <div class="legend-row"><div class="legend-swatch" style="background:#f87171; width:11px; height:11px;"></div><span>16–24 時</span></div>
+    </div>
+
+    <!-- 時段篩選（所有模式共用）-->
+    <div class="slot-filter" id="slot-filter">
+      <div class="slot-filter-title">通報時段 <span class="slot-filter-clear" id="slot-clear">全選</span></div>
+      <div class="slot-band active" data-band="0"><div class="band-dot" style="background:#60a5fa"></div><span>00–04 時</span><span class="band-count" id="bc-0"></span></div>
+      <div class="slot-band active" data-band="1"><div class="band-dot" style="background:#34d399"></div><span>04–10 時</span><span class="band-count" id="bc-1"></span></div>
+      <div class="slot-band active" data-band="2"><div class="band-dot" style="background:#facc15"></div><span>10–16 時</span><span class="band-count" id="bc-2"></span></div>
+      <div class="slot-band active" data-band="3"><div class="band-dot" style="background:#f87171"></div><span>16–24 時</span><span class="band-count" id="bc-3"></span></div>
     </div>
 
   </div>
@@ -279,6 +306,16 @@ var SLOT_COLORS = [
 var allFeatures = [];
 var viewMode = 'cluster';
 var map;
+
+// 時段 band 對應的 time_slot 範圍（0–11 共 12 個 2 小時時段）
+var SLOT_BANDS = [
+  { slots: [0, 1],        label: '00–04 時' },
+  { slots: [2, 3, 4],     label: '04–10 時' },
+  { slots: [5, 6, 7],     label: '10–16 時' },
+  { slots: [8, 9, 10, 11], label: '16–24 時' }
+];
+// 目前選取的 band 集合（全選狀態）
+var activeBands = new Set([0, 1, 2, 3]);
 
 map = new maplibregl.Map({
   container: 'map',
@@ -497,6 +534,27 @@ document.getElementById('btn-cluster').addEventListener('click', function() { se
 document.getElementById('btn-heatmap').addEventListener('click', function() { setViewMode('heatmap'); });
 document.getElementById('btn-points').addEventListener('click',  function() { setViewMode('points'); });
 
+// 時段 band 篩選
+document.querySelectorAll('.slot-band').forEach(function(el) {
+  el.addEventListener('click', function() {
+    var b = parseInt(el.dataset.band);
+    if (activeBands.has(b)) {
+      // 至少保留一個選取
+      if (activeBands.size > 1) activeBands.delete(b);
+    } else {
+      activeBands.add(b);
+    }
+    updateSlotBandUI();
+    applyFilter();
+  });
+});
+document.getElementById('slot-clear').addEventListener('click', function() {
+  if (activeBands.size === 4) return; // 已全選
+  activeBands = new Set([0, 1, 2, 3]);
+  updateSlotBandUI();
+  applyFilter();
+});
+
 function setDataSource(type, text) {
   var badge = document.getElementById('data-source-badge');
   badge.className = 'data-source-badge ' + type;
@@ -521,12 +579,13 @@ function normalizeFeatures(features) {
   });
 }
 
-function updateStats(features) {
-  document.getElementById('stat-visible').textContent = features.length;
+function updateStats(filtered) {
+  document.getElementById('stat-visible').textContent = filtered.length;
   document.getElementById('stat-total').textContent   = allFeatures.length;
-  if (allFeatures.length > 0) {
+  var src = filtered.length > 0 ? filtered : allFeatures;
+  if (src.length > 0) {
     var counts = new Array(12).fill(0);
-    allFeatures.forEach(function(f) {
+    src.forEach(function(f) {
       var s = parseInt(f.properties.time_slot);
       if (s >= 0 && s < 12) counts[s]++;
     });
@@ -535,16 +594,52 @@ function updateStats(features) {
   }
 }
 
-function applyData(features) {
-  allFeatures = features;
-  var fc = { type: 'FeatureCollection', features: features };
+function getFilteredFeatures() {
+  // 計算所有選取 band 對應的 time_slot 集合
+  var allowedSlots = new Set();
+  activeBands.forEach(function(b) {
+    SLOT_BANDS[b].slots.forEach(function(s) { allowedSlots.add(s); });
+  });
+  if (allowedSlots.size === 12) return allFeatures; // 全選，直接回傳
+  return allFeatures.filter(function(f) {
+    return allowedSlots.has(parseInt(f.properties.time_slot));
+  });
+}
+
+function applyFilter() {
+  var filtered = getFilteredFeatures();
+  var fc = { type: 'FeatureCollection', features: filtered };
   if (map.getSource('reports'))      map.getSource('reports').setData(fc);
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
-  updateStats(features);
-  document.getElementById('loading').classList.add('hidden');
-  // setZoom(同值) 強迫 MapLibre 重新請求目前 viewport 的 clustered tiles，
-  // 解決 clustered source 首次不渲染的問題
+  updateStats(filtered);
   map.setZoom(map.getZoom());
+}
+
+function updateSlotBandUI() {
+  var allActive = activeBands.size === 4;
+  document.getElementById('slot-clear').textContent = allActive ? '全選' : '清除篩選';
+  // 計算每個 band 的資料筆數
+  var counts = [0, 0, 0, 0];
+  allFeatures.forEach(function(f) {
+    var s = parseInt(f.properties.time_slot);
+    for (var b = 0; b < SLOT_BANDS.length; b++) {
+      if (SLOT_BANDS[b].slots.indexOf(s) !== -1) { counts[b]++; break; }
+    }
+  });
+  document.querySelectorAll('.slot-band').forEach(function(el) {
+    var b = parseInt(el.dataset.band);
+    var isActive = activeBands.has(b);
+    el.classList.toggle('active', isActive);
+    el.classList.toggle('dimmed', !isActive);
+    document.getElementById('bc-' + b).textContent = counts[b] > 0 ? counts[b].toLocaleString() : '';
+  });
+}
+
+function applyData(features) {
+  allFeatures = features;
+  updateSlotBandUI();
+  applyFilter();
+  document.getElementById('loading').classList.add('hidden');
 }
 
 function loadData() {

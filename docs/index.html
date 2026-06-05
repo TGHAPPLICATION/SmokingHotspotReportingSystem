@@ -411,9 +411,9 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-color': ['step', ['get', 'point_count'], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
-      'circle-radius': ['step', ['get', 'point_count'], 22, 5, 34, 15, 48, 30, 62],
-      'circle-opacity': ['step', ['get', 'point_count'], 0.12, 5, 0.15, 15, 0.18, 30, 0.22],
+      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 22, 5, 34, 15, 48, 30, 62],
+      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.12, 5, 0.15, 15, 0.18, 30, 0.22],
       'circle-blur': 0.65, 'circle-stroke-width': 0
     }
   });
@@ -424,22 +424,22 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-color': ['step', ['get', 'point_count'], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
-      'circle-radius': ['step', ['get', 'point_count'], 14, 5, 22, 15, 32, 30, 42],
+      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 14, 5, 22, 15, 32, 30, 42],
       'circle-opacity': 0.92,
       'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(255,255,255,.65)'
     }
   });
 
-  // 分群數字
+  // 分群數字（使用 OpenFreeMap 支援的字體）
   map.addLayer({
     id: 'layer-cluster-count', type: 'symbol', source: 'reports',
     filter: ['has', 'point_count'],
     layout: {
       visibility: 'visible',
       'text-field': ['coalesce', ['get', 'point_count_label'], ''],
-      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-size': ['step', ['get', 'point_count'], 12, 15, 13, 30, 15],
+      'text-font': ['Noto Sans Bold', 'Noto Sans Regular'],
+      'text-size': ['step', ['coalesce', ['get', 'point_count'], 0], 12, 15, 13, 30, 15],
       'text-allow-overlap': true
     },
     paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,.3)', 'text-halo-width': 1 }

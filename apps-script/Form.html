@@ -267,28 +267,21 @@ var state = {
   setInterval(updateSlotLabel, 60000);
 })();
 
-var BANDS = [
-  { label: '00–04 時', cls: 'band-0', slots: [0, 1] },
-  { label: '04–10 時', cls: 'band-1', slots: [2, 3, 4] },
-  { label: '10–16 時', cls: 'band-2', slots: [5, 6, 7] },
-  { label: '16–24 時', cls: 'band-3', slots: [8, 9, 10, 11] }
-];
-
-function slotToBand(slot) {
-  for (var b = 0; b < BANDS.length; b++) {
-    if (BANDS[b].slots.indexOf(slot) !== -1) return b;
-  }
-  return 3;
-}
-
 function updateSlotLabel() {
+  var bands = [
+    { label: '00–04 時', cls: 'band-0', max: 4  },
+    { label: '04–10 時', cls: 'band-1', max: 10 },
+    { label: '10–16 時', cls: 'band-2', max: 16 },
+    { label: '16–24 時', cls: 'band-3', max: 24 }
+  ];
   var h = new Date().getHours();
-  var slot = Math.floor(h / 2);
-  state.timeSlot = slot;
-  var band = BANDS[slotToBand(slot)];
+  state.timeSlot = Math.floor(h / 2);
+  var band = bands[3];
+  for (var i = 0; i < bands.length; i++) {
+    if (h < bands[i].max) { band = bands[i]; break; }
+  }
   document.getElementById('slot-label').textContent = band.label;
-  var badge = document.getElementById('timeslot-badge');
-  badge.className = 'timeslot-badge ' + band.cls;
+  document.getElementById('timeslot-badge').className = 'timeslot-badge ' + band.cls;
 }
 
 // ── GPS 定位 ──────────────────────────────────────────────────

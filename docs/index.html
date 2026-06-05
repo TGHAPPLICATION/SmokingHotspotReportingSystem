@@ -427,11 +427,8 @@ function initLayers() {
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 5, 18, 12],
       'circle-color': [
-        'match', ['%', ['coalesce', ['to-number', ['get', 'time_slot']], 0], 12],
-        0,  SLOT_COLORS[0],  1,  SLOT_COLORS[1],  2,  SLOT_COLORS[2],  3,  SLOT_COLORS[3],
-        4,  SLOT_COLORS[4],  5,  SLOT_COLORS[5],  6,  SLOT_COLORS[6],  7,  SLOT_COLORS[7],
-        8,  SLOT_COLORS[8],  9,  SLOT_COLORS[9],  10, SLOT_COLORS[10], 11, SLOT_COLORS[11],
-        '#e74c3c'
+        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
+        '#60a5fa', 2, '#34d399', 5, '#facc15', 8, '#f87171'
       ],
       'circle-opacity': 0.9, 'circle-stroke-width': 1.5,
       'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.8
@@ -454,13 +451,13 @@ function initLayers() {
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 11],
       'circle-color': [
-        'match', ['%', ['coalesce', ['to-number', ['get', 'time_slot']], 0], 12],
-        0,  SLOT_COLORS[0],  1,  SLOT_COLORS[1],  2,  SLOT_COLORS[2],  3,  SLOT_COLORS[3],
-        4,  SLOT_COLORS[4],  5,  SLOT_COLORS[5],  6,  SLOT_COLORS[6],  7,  SLOT_COLORS[7],
-        8,  SLOT_COLORS[8],  9,  SLOT_COLORS[9],  10, SLOT_COLORS[10], 11, SLOT_COLORS[11],
-        '#e74c3c'
+        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
+        '#60a5fa',  // slot 0–1  (00–04 時)
+        2,  '#34d399',  // slot 2–4  (04–10 時)
+        5,  '#facc15',  // slot 5–7  (10–16 時)
+        8,  '#f87171'   // slot 8–11 (16–24 時)
       ],
-      'circle-opacity': 0.75, 'circle-stroke-width': 0
+      'circle-opacity': 0.85, 'circle-stroke-width': 0
     }
   });
 

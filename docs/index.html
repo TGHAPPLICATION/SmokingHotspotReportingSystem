@@ -90,11 +90,18 @@
     color: #f47174;
   }
 
-  /* ── 定位按鈕 ── */
-  .locate-btn {
+  /* ── 右側浮動控制群 ── */
+  .map-controls {
     position: absolute;
     top: 14px;
     right: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 5;
+  }
+
+  .locate-btn {
     width: 40px; height: 40px;
     background: rgba(13,17,23,.88);
     backdrop-filter: blur(10px);
@@ -103,11 +110,42 @@
     color: #e6edf3;
     font-size: 1.1rem;
     cursor: pointer;
-    z-index: 5;
     display: flex; align-items: center; justify-content: center;
     transition: background .2s;
   }
   .locate-btn:hover { background: rgba(231,76,60,.3); }
+
+  /* ── 視圖模式切換 ── */
+  .view-toggle {
+    background: rgba(13,17,23,.88);
+    backdrop-filter: blur(10px);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .view-btn {
+    background: transparent;
+    border: none;
+    color: #8b949e;
+    font-size: .72rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all .15s;
+    white-space: nowrap;
+    border-bottom: 1px solid #30363d;
+  }
+  .view-btn:last-child { border-bottom: none; }
+  .view-btn:hover { color: #e6edf3; background: rgba(255,255,255,.05); }
+  .view-btn.active {
+    color: #f47174;
+    background: rgba(231,76,60,.15);
+  }
 
   /* ── 時段選擇器（底部浮動）── */
   .slot-panel {
@@ -212,6 +250,13 @@
   .popup-addr { color: #e6edf3; margin-bottom: 4px; font-weight: 500; }
   .popup-desc { color: #8b949e; font-size: .78rem; }
   .popup-time { color: #6e7681; font-size: .72rem; margin-top: 6px; }
+  .popup-cluster {
+    font-weight: 700;
+    font-size: .9rem;
+    color: #e6edf3;
+    margin-bottom: 4px;
+  }
+  .popup-cluster-hint { color: #8b949e; font-size: .75rem; }
 
   /* ── Loading ── */
   .loading-overlay {
@@ -240,6 +285,54 @@
     70%  { transform: scale(1.6); opacity: 0; }
     100% { transform: scale(1.6); opacity: 0; }
   }
+
+  /* ── 圖例 ── */
+  .legend {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    background: rgba(13,17,23,.88);
+    backdrop-filter: blur(10px);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px 12px;
+    z-index: 5;
+    font-size: .72rem;
+    color: #8b949e;
+    min-width: 120px;
+  }
+  .legend-title {
+    font-weight: 700;
+    color: #e6edf3;
+    margin-bottom: 6px;
+    font-size: .75rem;
+  }
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 4px;
+  }
+  .legend-row:last-child { margin-bottom: 0; }
+  .legend-dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1.5px solid rgba(255,255,255,.4);
+  }
+  .legend-cluster {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .6rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .legend.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -276,8 +369,45 @@
     </div>
   </div>
 
-  <!-- 定位按鈕 -->
-  <button class="locate-btn" id="locate-btn" title="移至我的位置">📍</button>
+  <!-- 右側控制群 -->
+  <div class="map-controls">
+    <button class="locate-btn" id="locate-btn" title="移至我的位置">📍</button>
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-cluster" title="分群模式">🔵 分群</button>
+      <button class="view-btn" id="btn-heatmap" title="熱力模式">🔥 熱力</button>
+      <button class="view-btn" id="btn-points" title="點位模式">⚪ 點位</button>
+    </div>
+  </div>
+
+  <!-- 圖例（分群模式）-->
+  <div class="legend" id="legend-cluster">
+    <div class="legend-title">群組大小</div>
+    <div class="legend-row">
+      <div class="legend-cluster" style="background:#2ecc71; width:18px; height:18px; font-size:.55rem;">3</div>
+      <span>1–4 筆</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-cluster" style="background:#f1c40f; width:24px; height:24px;">8</div>
+      <span>5–14 筆</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-cluster" style="background:#e67e22; width:30px; height:30px;">20</div>
+      <span>15–29 筆</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-cluster" style="background:#e74c3c; width:36px; height:36px;">50</div>
+      <span>30 筆以上</span>
+    </div>
+  </div>
+
+  <!-- 圖例（點位模式）-->
+  <div class="legend hidden" id="legend-points">
+    <div class="legend-title">通報時段</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#3498db;"></div><span>00–06 時</span></div>
+    <div class="legend-row"><div class="legend-dot" style="background:#2ecc71;"></div><span>06–12 時</span></div>
+    <div class="legend-row"><div class="legend-dot" style="background:#f1c40f;"></div><span>12–18 時</span></div>
+    <div class="legend-row"><div class="legend-dot" style="background:#e74c3c;"></div><span>18–24 時</span></div>
+  </div>
 
   <!-- 時段選擇面板 -->
   <div class="slot-panel">
@@ -301,7 +431,7 @@
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
 <script>
 // ── 設定 ─────────────────────────────────────────────────────
-var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';  // ← 部署 Apps Script 後填入
+var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
 var TAIPEI_CENTER = [121.5654, 25.0330];
 
@@ -311,9 +441,21 @@ var SLOT_LABELS = [
   '16–18','18–20','20–22','22–24'
 ];
 
+// 時段→顏色（與點位圖層一致）
+var TIME_COLOR = [
+  'interpolate', ['linear'],
+  ['coalesce', ['to-number', ['get', 'time_slot']], 0],
+  0,  '#3498db',
+  3,  '#2ecc71',
+  6,  '#f1c40f',
+  9,  '#e67e22',
+  11, '#e74c3c'
+];
+
 // ── 狀態 ─────────────────────────────────────────────────────
 var allFeatures = [];
 var currentSlot = 'all';
+var viewMode = 'cluster'; // 'cluster' | 'heatmap' | 'points'
 var map;
 
 // ── 地圖初始化 ────────────────────────────────────────────────
@@ -339,17 +481,130 @@ map.on('load', function() {
 
 // ── 圖層初始化 ────────────────────────────────────────────────
 function initLayers() {
+  // 分群 source（clusterMaxZoom=15: 縮放 16+ 才顯示個別點位）
   map.addSource('reports', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] },
-    cluster: false
+    cluster: true,
+    clusterMaxZoom: 15,
+    clusterRadius: 50,
+    clusterProperties: {
+      // 彙整各群內的 time_slot 極值，供後續擴充使用
+      'max_slot': ['max', ['get', 'time_slot']],
+      'min_slot': ['min', ['get', 'time_slot']]
+    }
   });
 
-  // 脈衝外圈
+  // 熱力圖用的 raw source（不分群，保留所有原始點位）
+  map.addSource('reports-heat', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+
+  // ── 熱力圖層（預設隱藏）──
   map.addLayer({
-    id: 'reports-pulse',
+    id: 'layer-heatmap',
+    type: 'heatmap',
+    source: 'reports-heat',
+    layout: { visibility: 'none' },
+    paint: {
+      // 點位權重固定為 1
+      'heatmap-weight': 1,
+      // 隨縮放增加熱度強度
+      'heatmap-intensity': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 1,
+        15, 3
+      ],
+      // 熱力色階：透明→藍→黃→橘→紅
+      'heatmap-color': [
+        'interpolate', ['linear'], ['heatmap-density'],
+        0,   'rgba(33,102,172,0)',
+        0.2, 'rgb(103,169,207)',
+        0.4, 'rgb(253,219,199)',
+        0.6, 'rgb(239,138,98)',
+        0.8, 'rgb(217,72,1)',
+        1,   'rgb(178,24,43)'
+      ],
+      // 隨縮放增加半徑
+      'heatmap-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        10, 15,
+        15, 35
+      ],
+      'heatmap-opacity': 0.85
+    }
+  });
+
+  // ── 分群圓圈（大小與深淺依 point_count）──
+  map.addLayer({
+    id: 'layer-clusters',
     type: 'circle',
     source: 'reports',
+    filter: ['has', 'point_count'],
+    layout: { visibility: 'visible' },
+    paint: {
+      // 顏色依數量四段：綠→黃→橘→紅
+      'circle-color': [
+        'step', ['get', 'point_count'],
+        '#2ecc71',   // < 5
+        5,  '#f1c40f',  // 5–14
+        15, '#e67e22',  // 15–29
+        30, '#e74c3c'   // 30+
+      ],
+      // 大小依數量四段
+      'circle-radius': [
+        'step', ['get', 'point_count'],
+        20,
+        5,  28,
+        15, 36,
+        30, 44
+      ],
+      'circle-opacity': 0.88,
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': 'rgba(255,255,255,.55)',
+      // 外暈光依數量增強
+      'circle-blur': [
+        'step', ['get', 'point_count'],
+        0.08,
+        15, 0.15,
+        30, 0.22
+      ]
+    }
+  });
+
+  // ── 分群數字標籤 ──
+  map.addLayer({
+    id: 'layer-cluster-count',
+    type: 'symbol',
+    source: 'reports',
+    filter: ['has', 'point_count'],
+    layout: {
+      visibility: 'visible',
+      'text-field': '{point_count_abbreviated}',
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-size': [
+        'step', ['get', 'point_count'],
+        13,
+        15, 15,
+        30, 17
+      ],
+      'text-allow-overlap': true
+    },
+    paint: {
+      'text-color': '#ffffff',
+      'text-halo-color': 'rgba(0,0,0,.25)',
+      'text-halo-width': 1
+    }
+  });
+
+  // ── 脈衝外圈（非群組點位）──
+  map.addLayer({
+    id: 'layer-pulse',
+    type: 'circle',
+    source: 'reports',
+    filter: ['!', ['has', 'point_count']],
+    layout: { visibility: 'visible' },
     paint: {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
@@ -366,26 +621,20 @@ function initLayers() {
     }
   });
 
-  // 熱力漸變點位（主圖層）
+  // ── 個別點位（非群組，依時段上色）──
   map.addLayer({
-    id: 'reports-circle',
+    id: 'layer-points',
     type: 'circle',
     source: 'reports',
+    filter: ['!', ['has', 'point_count']],
+    layout: { visibility: 'visible' },
     paint: {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
         10, 7, 14, 14, 18, 22
       ],
-      'circle-color': [
-        'interpolate', ['linear'],
-        ['coalesce', ['to-number', ['get', 'time_slot']], 0],
-        0,  '#3498db',
-        3,  '#2ecc71',
-        6,  '#f1c40f',
-        9,  '#e67e22',
-        11, '#e74c3c'
-      ],
-      'circle-opacity': .85,
+      'circle-color': TIME_COLOR,
+      'circle-opacity': .88,
       'circle-stroke-width': 1.5,
       'circle-stroke-color': '#fff',
       'circle-stroke-opacity': .6,
@@ -393,14 +642,22 @@ function initLayers() {
     }
   });
 
-  // 滑鼠互動
-  map.on('mouseenter', 'reports-circle', function() {
-    map.getCanvas().style.cursor = 'pointer';
+  // ── 互動：點擊群組 → 縮放展開 ──
+  map.on('click', 'layer-clusters', function(e) {
+    var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
+    var clusterId = feature.properties.cluster_id;
+    map.getSource('reports').getClusterExpansionZoom(clusterId, function(err, zoom) {
+      if (err) return;
+      map.easeTo({
+        center: feature.geometry.coordinates,
+        zoom: Math.min(zoom, 18),
+        duration: 400
+      });
+    });
   });
-  map.on('mouseleave', 'reports-circle', function() {
-    map.getCanvas().style.cursor = '';
-  });
-  map.on('click', 'reports-circle', function(e) {
+
+  // ── 互動：點擊個別點位 → Popup ──
+  map.on('click', 'layer-points', function(e) {
     var props = e.features[0].properties;
     var coords = e.features[0].geometry.coordinates.slice();
     var slot = parseInt(props.time_slot);
@@ -411,10 +668,16 @@ function initLayers() {
       .setHTML(
         '<div class="popup-slot">⏱ ' + SLOT_LABELS[slot] + '</div>' +
         (props.address_input ? '<div class="popup-addr">📍 ' + esc(props.address_input) + '</div>' : '') +
-        (props.description ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
+        (props.description  ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
         (ts ? '<div class="popup-time">🕐 ' + ts + '</div>' : '')
       )
       .addTo(map);
+  });
+
+  // ── 游標樣式 ──
+  ['layer-clusters', 'layer-points'].forEach(function(id) {
+    map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 }
 
@@ -422,8 +685,55 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── 視圖模式切換 ──────────────────────────────────────────────
+var LAYER_VISIBILITY = {
+  cluster: {
+    'layer-heatmap':       'none',
+    'layer-clusters':      'visible',
+    'layer-cluster-count': 'visible',
+    'layer-pulse':         'visible',
+    'layer-points':        'visible'
+  },
+  heatmap: {
+    'layer-heatmap':       'visible',
+    'layer-clusters':      'none',
+    'layer-cluster-count': 'none',
+    'layer-pulse':         'none',
+    'layer-points':        'none'
+  },
+  points: {
+    'layer-heatmap':       'none',
+    'layer-clusters':      'none',
+    'layer-cluster-count': 'none',
+    'layer-pulse':         'visible',
+    'layer-points':        'visible'
+  }
+};
+
+function setViewMode(mode) {
+  viewMode = mode;
+  var vis = LAYER_VISIBILITY[mode];
+  Object.keys(vis).forEach(function(layerId) {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, 'visibility', vis[layerId]);
+    }
+  });
+
+  // 按鈕 active 狀態
+  document.querySelectorAll('.view-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.id === 'btn-' + mode);
+  });
+
+  // 圖例切換
+  document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
+  document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
+}
+
+document.getElementById('btn-cluster').addEventListener('click', function() { setViewMode('cluster'); });
+document.getElementById('btn-heatmap').addEventListener('click', function() { setViewMode('heatmap'); });
+document.getElementById('btn-points').addEventListener('click',  function() { setViewMode('points'); });
+
 // ── 資料載入 ──────────────────────────────────────────────────
-// time_slot 確保為數值，座標確保為有效數字
 function normalizeFeatures(features) {
   return features.filter(function(f) {
     var c = f.geometry && f.geometry.coordinates;
@@ -448,7 +758,6 @@ function loadData() {
       document.getElementById('loading').classList.add('hidden');
     })
     .catch(function() {
-      // Fallback to mock
       fetch(MOCK_URL)
         .then(function(r) { return r.json(); })
         .then(function(geojson) {
@@ -471,7 +780,6 @@ function buildSlotButtons() {
   var grid = document.getElementById('slot-grid');
   grid.innerHTML = '';
 
-  // 全部按鈕
   var allBtn = document.createElement('button');
   allBtn.className = 'slot-btn slot-btn-all' + (currentSlot === 'all' ? ' active' : '');
   allBtn.dataset.slot = 'all';
@@ -508,18 +816,15 @@ function filterAndRender(slot) {
         return String(f.properties.time_slot) === slot;
       });
 
-  if (map.getSource('reports')) {
-    map.getSource('reports').setData({
-      type: 'FeatureCollection',
-      features: filtered
-    });
-  }
+  var fc = { type: 'FeatureCollection', features: filtered };
+
+  if (map.getSource('reports'))      map.getSource('reports').setData(fc);
+  if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
 
   // 統計更新
   document.getElementById('stat-visible').textContent = filtered.length;
-  document.getElementById('stat-total').textContent = allFeatures.length;
+  document.getElementById('stat-total').textContent   = allFeatures.length;
 
-  // 最熱時段
   if (allFeatures.length > 0) {
     var counts = new Array(12).fill(0);
     allFeatures.forEach(function(f) {
@@ -550,7 +855,7 @@ document.getElementById('locate-btn').addEventListener('click', function() {
   });
 });
 
-// ── 通報連結（部署後自動填入）── ──────────────────────────────
+// ── 通報連結 ─────────────────────────────────────────────────
 (function setReportLink() {
   var link = document.getElementById('report-link');
   if (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') {

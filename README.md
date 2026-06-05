@@ -1,139 +1,159 @@
-# 吸菸熱點通報系統 Smoking Hotspot Reporting System
+# 台北市吸菸熱點通報系統
 
-台北市吸菸熱點通報與統計地圖系統，提供市民即時通報吸菸熱點，並以互動地圖呈現時空分布。
+提供市民透過手機瀏覽器即時通報吸菸熱點，並以互動地圖呈現時空分布與長期成效趨勢，協助衛生局掌握吸菸行為的時空分布與稽查成效。
+
+## 線上展示
+
+| 功能 | 網址 |
+|------|------|
+| 統計地圖 | `https://tghtaipei.github.io/SmokingHotspotReportingSystem/` |
+| 通報表單 | Apps Script 部署網址（見部署步驟） |
+
+---
 
 ## 系統架構
 
 ```
 使用者手機瀏覽器
        │
-       ├──[通報表單] Apps Script Web App (HTML Service)
+       ├──[通報] Apps Script Web App (HTML Service)
        │              │
-       │         Google Maps Geocoding（後端，免 API Key）
+       │         POST doPost() → 驗證 → 去重 → 寫入
        │              │
        │         Google Sheets (SmokingReports)
        │
-       └──[統計地圖] GitHub Pages (docs/index.html)
+       └──[查看地圖] GitHub Pages (docs/index.html)
                      │
-                     └── fetch ?action=getReports
+                     └── fetch ?action=getReports → GeoJSON
                               │
-                         Apps Script doGet() → GeoJSON
+                         Apps Script doGet()
 ```
 
-## 功能說明
+**技術選型**
 
-### 電子表單（Apps Script）
-- **GPS 自動定位**：一鍵取得裝置座標，顯示 Leaflet 地圖預覽
-- **手動地址輸入**：透過 Apps Script 後端呼叫 Google Maps Geocoding，精確支援台灣中文地址
-- **時段自動計算**：送出時依台北時間自動計算所屬時段（0:00 起，每 2 小時一段，共 12 段）
-- **重複通報防護**：同一裝置在同時段、100m 範圍內僅計 1 筆
+| 元件 | 技術 |
+|------|------|
+| 通報表單 | Google Apps Script HTML Service |
+| 資料庫 | Google Sheets |
+| 後端 API | Apps Script Web App (doGet / doPost) |
+| 地圖前端 | GitHub Pages + MapLibre GL JS 4.3.2 |
+| 分群演算法 | supercluster 8.0.1（JS 端手動計算） |
+| 圖表報表 | Chart.js 4.4.3 |
+| 底圖 | OpenFreeMap liberty（免費、無需 API Key） |
+| 測試資料產生 | Apps Script GenerateMockData.gs（10,000 筆） |
 
-### 統計地圖（GitHub Pages）
-- **底圖**：OpenFreeMap liberty 樣式（免費、無需 API Key）
-- **點位圖層**：12 個時段各對應不同高對比顏色，附白色外框易於辨識
-- **自動對焦**：資料載入後地圖自動飛至點位所在區域
-- **時段篩選**：底部浮動按鈕列（全部 + 12 時段），有資料的時段顯示色點
-- **資料來源狀態**：左上角即時顯示「即時資料 / 示範資料」與筆數
-- **重新整理按鈕**：右上角 🔄 手動重新載入最新資料
+---
 
-## 時段對照表
+## 地圖功能
 
-| 時段編號 | 時間範圍 | 點位顏色 |
-|---------|---------|---------|
-| 0  | 00:00–01:59 | 🔵 藍 |
-| 1  | 02:00–03:59 | 🔷 靛藍 |
-| 2  | 04:00–05:59 | 🟣 紫 |
-| 3  | 06:00–07:59 | 🟢 翠綠 |
-| 4  | 08:00–09:59 | 🟩 綠 |
-| 5  | 10:00–11:59 | 🟡 黃 |
-| 6  | 12:00–13:59 | 🟠 橙 |
-| 7  | 14:00–15:59 | 🩷 珊瑚紅 |
-| 8  | 16:00–17:59 | 🔴 紅 |
-| 9  | 18:00–19:59 | 🔴 深紅 |
-| 10 | 20:00–21:59 | 🟣 深紫 |
-| 11 | 22:00–23:59 | 🔵 深藍 |
+### 三種視覺化模式（可即時切換）
+
+| 模式 | 說明 |
+|------|------|
+| 🔵 分群 | supercluster 動態聚合，圓圈大小與顏色深淺呈現數量（綠→黃→橘→紅） |
+| 🔥 熱力 | WebGL heatmap，密度梯度呈現空間分布 |
+| ⚪ 點位 | 所有個別點位，依時段 4 色顯示 |
+
+### 篩選功能
+
+- **月份滑桿**：選取特定月份或「全部時間」，◀ ▶ 按鈕逐月切換
+- **時段 band 篩選**：點選 00–04 / 04–10 / 10–16 / 16–24 時，可多選
+- 月份與時段篩選串聯，同步更新所有視覺化模式
+
+### 統計資訊（左側面板）
+
+- 顯示點位數（目前篩選後）
+- 總回報數（全部資料）
+- 最熱時段
+
+### 📊 成效報表
+
+點擊 Header「📊 成效報表」按鈕，從右側滑出報表面板，包含：
+
+- **指標卡**：總通報數、環比變化（%）、連續下降月數、峰值月份、最熱時段、涵蓋月數
+- **月趨勢折線圖**：每月通報量走勢
+- **時段分布橫條圖**：各時段佔比
+- **月份 × 時段堆疊橫條圖**：每月各時段比例，可觀察稽查後尖峰時段是否轉移
+
+---
 
 ## 目錄結構
 
 ```
-├── docs/                        # GitHub Pages 靜態檔案
-│   ├── index.html               # 統計熱點地圖（MapLibre GL）
-│   └── api-mock.json            # 本機測試用示範資料（15 筆）
+├── docs/
+│   ├── index.html          # 統計熱點地圖（MapLibre GL + supercluster + Chart.js）
+│   └── api-mock.json       # 本機示範資料（10,000 筆）
 ├── apps-script/
-│   ├── Code.gs                  # 主程式（表單送出、API、去重、驗證）
-│   ├── processFormData.gs       # HTML Service 橋接 + Google Maps Geocoding
-│   ├── Form.html                # 通報表單（GPS / 手動地址）
-│   └── appsscript.json          # Apps Script 專案設定
-├── tests/
-│   ├── unit/logic.test.js       # 單元測試（33 項）
-│   ├── integration/api.test.js  # 整合測試（15 項）
-│   └── test-plan.md             # 測試規劃文件
+│   ├── Code.gs             # 主程式（表單送出、API、去重、驗證）
+│   ├── GenerateMockData.gs # 測試資料產生器（10,000 筆，含清除功能）
+│   ├── Form.html           # 通報表單（GPS / 手動地址）
+│   └── appsscript.json     # Apps Script 專案設定
 ├── design/
-│   └── system-design.md         # 系統設計規劃文件
-└── package.json
+│   └── system-design.md    # 系統設計規劃文件
+└── README.md
 ```
 
-## 已知限制
-
-| 項目 | 說明 |
-|------|------|
-| Google Maps Geocoding 配額 | 免費帳號 100 次/天、Workspace 1,000 次/天（僅手動輸入地址時消耗） |
-| GPS 精度 | 依裝置與環境而定，室內可能偏差 10–50m |
-| 通報座標範圍 | 限制在台北市（緯度 24.9–25.3，經度 121.4–121.7） |
-
-## 部署步驟
-
-### 一、Apps Script 部署
-
-1. 開啟 [Google Apps Script](https://script.google.com) 建立新專案
-2. 複製以下檔案內容至對應的 `.gs` / `.html` 檔：
-   - `Code.gs` → 主程式
-   - `processFormData.gs` → 新增至專案（同名新檔）
-   - `Form.html` → HTML 檔案
-   - `appsscript.json` → 專案設定（需開啟「顯示 appsscript.json」）
-3. 修改 `Code.gs` 第 4 行的 `SHEET_ID` 為您的 Google Sheets ID
-4. 部署 → 新增部署作業 → 類型選「網頁應用程式」
-   - 執行者：**我**
-   - 存取者：**所有人**
-5. 複製部署網址（`https://script.google.com/macros/s/.../exec`）
-
-### 二、GitHub Pages 部署
-
-1. 確認 `docs/index.html` 第 304 行的 `API_URL` 已填入 Apps Script 部署網址
-2. 推送 `main` 分支至 GitHub
-3. Repository Settings → Pages → Source：**Deploy from a branch**
-   - Branch：`main`，Folder：`/docs`
-4. 儲存後等待約 1–2 分鐘，部署網址：
-   ```
-   https://tghtaipei.github.io/SmokingHotspotReportingSystem/
-   ```
-
-## 測試
-
-```bash
-npm test                  # 執行所有測試（單元 + 整合）
-npm run test:unit         # 只執行單元測試（33 項）
-npm run test:integration  # 只執行整合測試（15 項）
-```
-
-測試結果（最後執行）：
-```
-單元測試：33/33 通過 ✅
-整合測試：15/15 通過 ✅
-```
+---
 
 ## Google Sheets 資料欄位
 
 工作表名稱：`SmokingReports`
 
-| 欄位 | 說明 |
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | STRING | UUID（自動產生） |
+| timestamp | DATETIME | 回報時間（ISO 8601） |
+| time_slot | INTEGER | 時段 0–11（`floor(hour/2)`） |
+| lat | FLOAT | 緯度 |
+| lng | FLOAT | 經度 |
+| location_source | STRING | `gps` 或 `manual` |
+| address_input | STRING | 使用者輸入的地址（選填） |
+| description | STRING | 補充說明（選填） |
+| reporter_hash | STRING | SHA-256 雜湊前 16 碼（用於去重，不儲存個人資料） |
+
+---
+
+## 部署步驟
+
+### 一、Google Sheets 設定
+
+1. 建立新 Google Sheets，複製試算表 ID（URL 中的長字串）
+
+### 二、Apps Script 部署
+
+1. 開啟 [Google Apps Script](https://script.google.com) 建立新專案
+2. 複製以下檔案至對應 `.gs` / `.html`：
+   - `Code.gs`、`GenerateMockData.gs`、`Form.html`、`appsscript.json`
+3. 修改 `Code.gs` 第 5 行 `SHEET_ID` 為您的試算表 ID
+4. **部署 → 新增部署 → 網頁應用程式**
+   - 執行者：**我**
+   - 存取者：**所有人**
+5. 複製部署網址
+
+### 三、GitHub Pages 設定
+
+1. 將 `docs/index.html` 內的 `API_URL` 替換為 Apps Script 部署網址
+2. Repository Settings → Pages → Branch: `main`，Folder: `/docs`
+3. 約 1–2 分鐘後生效
+
+### 四、產生測試資料（選用）
+
+在 Apps Script 編輯器執行 `generateMockData()`，自動寫入 10,000 筆台北市模擬通報資料。執行 `clearMockData()` 可清除（reporter_hash 以 `mock-` 開頭的資料）。
+
+---
+
+## 安全性設計
+
+- 不儲存使用者個人資料
+- 以裝置識別碼 SHA-256 雜湊去重，同一裝置同時段同位置（100m 內）僅計 1 筆
+- 座標限制於台北市範圍（緯度 24.9–25.3，經度 121.4–121.7）
+
+---
+
+## 已知限制
+
+| 項目 | 說明 |
 |------|------|
-| id | UUID（自動產生） |
-| timestamp | 回報時間（ISO 8601，UTC） |
-| time_slot | 時段 0–11（依台北時間自動計算） |
-| lat | 緯度 |
-| lng | 經度 |
-| location_source | `gps` 或 `manual` |
-| address_input | 使用者輸入的地址（手動模式） |
-| description | 補充說明（選填） |
-| reporter_hash | 裝置識別碼 SHA-256 雜湊（前 16 碼，用於去重） |
+| GPS 精度 | 依裝置與環境，室內可能偏差 10–50m |
+| Apps Script 配額 | 免費帳號每日執行時間上限 6 分鐘，大量資料讀取時需注意 |
+| 字體限制 | OpenFreeMap 不提供自訂字體，地圖標籤使用底圖內建字體 |

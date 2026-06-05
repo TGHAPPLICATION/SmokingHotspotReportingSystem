@@ -228,6 +228,58 @@
     border-top-color: #e74c3c; border-radius: 50%; animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── 報表面板 ── */
+  .report-panel {
+    position: fixed; top: 0; right: -420px; width: 420px; height: 100%;
+    background: rgba(13,17,23,.97); backdrop-filter: blur(16px);
+    border-left: 1px solid #21262d; z-index: 50;
+    display: flex; flex-direction: column;
+    transition: right .3s cubic-bezier(.4,0,.2,1);
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+  }
+  .report-panel.open { right: 0; }
+  .report-panel-header {
+    padding: 0 16px; height: 44px; border-bottom: 1px solid #21262d;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .report-panel-header h2 { font-size: .9rem; font-weight: 700; color: #e6edf3; }
+  .report-close {
+    background: none; border: none; color: #6e7681; font-size: 1.2rem;
+    cursor: pointer; padding: 4px 8px; border-radius: 5px; transition: color .15s;
+  }
+  .report-close:hover { color: #e6edf3; }
+  .report-body { flex: 1; overflow-y: auto; padding: 14px 16px 20px; }
+  .report-section { margin-bottom: 20px; }
+  .report-section-title {
+    font-size: .68rem; font-weight: 700; color: #6e7681;
+    text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px;
+  }
+  /* 指標卡 */
+  .kpi-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .kpi-card {
+    flex: 1; background: rgba(255,255,255,.04); border: 1px solid #30363d;
+    border-radius: 9px; padding: 10px 10px 8px; text-align: center;
+  }
+  .kpi-value { font-size: 1.2rem; font-weight: 700; color: #e6edf3; line-height: 1.1; }
+  .kpi-value.up   { color: #f87171; }
+  .kpi-value.down { color: #34d399; }
+  .kpi-desc { font-size: .6rem; color: #6e7681; margin-top: 3px; line-height: 1.3; }
+  /* 圖表容器 */
+  .chart-wrap {
+    background: rgba(255,255,255,.03); border: 1px solid #21262d;
+    border-radius: 9px; padding: 12px; position: relative;
+  }
+  .chart-wrap canvas { max-height: 200px; }
+  /* 報表按鈕 */
+  .analytics-btn {
+    background: rgba(96,165,250,.12); border: 1px solid rgba(96,165,250,.35);
+    color: #60a5fa; border-radius: 8px; padding: 5px 11px;
+    font-size: .76rem; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+    transition: all .2s; white-space: nowrap; flex-shrink: 0;
+  }
+  .analytics-btn:hover { background: rgba(96,165,250,.22); }
 </style>
 </head>
 <body>
@@ -238,7 +290,78 @@
     <h1>台北市吸菸熱點地圖</h1>
     <span class="header-sub">即時通報</span>
   </div>
-  <a class="report-btn" id="report-link" href="#" target="_blank">📍 通報</a>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="analytics-btn" id="analytics-btn">📊 成效報表</button>
+    <a class="report-btn" id="report-link" href="#" target="_blank">📍 通報</a>
+  </div>
+</div>
+
+<!-- 報表面板 -->
+<div class="report-panel" id="report-panel">
+  <div class="report-panel-header">
+    <h2>📊 成效報表</h2>
+    <button class="report-close" id="report-close">✕</button>
+  </div>
+  <div class="report-body">
+
+    <!-- 指標卡 -->
+    <div class="report-section">
+      <div class="report-section-title">整體指標</div>
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-total">—</div>
+          <div class="kpi-desc">資料範圍<br>總通報數</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-mom">—</div>
+          <div class="kpi-desc">最近月份<br>環比變化</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-streak">—</div>
+          <div class="kpi-desc">連續下降<br>月數</div>
+        </div>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-peak-month">—</div>
+          <div class="kpi-desc">歷史峰值<br>月份</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-peak-slot">—</div>
+          <div class="kpi-desc">全域最熱<br>時段</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-months">—</div>
+          <div class="kpi-desc">涵蓋月數</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 月趨勢折線圖 -->
+    <div class="report-section">
+      <div class="report-section-title">每月通報量趨勢</div>
+      <div class="chart-wrap">
+        <canvas id="chart-trend"></canvas>
+      </div>
+    </div>
+
+    <!-- 時段分布橫條圖 -->
+    <div class="report-section">
+      <div class="report-section-title">時段分布（全部月份）</div>
+      <div class="chart-wrap">
+        <canvas id="chart-slot"></canvas>
+      </div>
+    </div>
+
+    <!-- 月份×時段 堆疊圖 -->
+    <div class="report-section">
+      <div class="report-section-title">各月時段分布</div>
+      <div class="chart-wrap">
+        <canvas id="chart-stack"></canvas>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <div id="map">
@@ -336,6 +459,7 @@
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
@@ -811,6 +935,174 @@ document.getElementById('locate-btn').addEventListener('click', function() {
 });
 
 document.getElementById('refresh-btn').addEventListener('click', loadData);
+
+// ── 報表面板 ──────────────────────────────────────────────────
+var chartTrend = null, chartSlot = null, chartStack = null;
+
+var BAND_COLORS = ['#60a5fa', '#34d399', '#facc15', '#f87171'];
+var BAND_LABELS = ['00–04 時', '04–10 時', '10–16 時', '16–24 時'];
+var BAND_SLOTS  = [[0,1],[2,3,4],[5,6,7],[8,9,10,11]];
+
+function slotToBand(s) {
+  for (var b = 0; b < BAND_SLOTS.length; b++) {
+    if (BAND_SLOTS[b].indexOf(s) !== -1) return b;
+  }
+  return 3;
+}
+
+function buildReportData() {
+  // 月份 → { total, bands[4] }
+  var monthMap = {};
+  allFeatures.forEach(function(f) {
+    var m = featureMonth(f);
+    if (!m) return;
+    if (!monthMap[m]) monthMap[m] = { total: 0, bands: [0,0,0,0] };
+    monthMap[m].total++;
+    monthMap[m].bands[slotToBand(parseInt(f.properties.time_slot) || 0)]++;
+  });
+  var months = Object.keys(monthMap).sort();
+  return { months: months, monthMap: monthMap };
+}
+
+function renderReportCharts() {
+  var d = buildReportData();
+  var months = d.months;
+  var monthMap = d.monthMap;
+  if (!months.length) return;
+
+  var totals = months.map(function(m) { return monthMap[m].total; });
+
+  // ── 指標卡 ──
+  document.getElementById('kpi-total').textContent = allFeatures.length.toLocaleString();
+  document.getElementById('kpi-months').textContent = months.length + ' 個月';
+
+  // 環比（最近兩個月）
+  if (months.length >= 2) {
+    var last = totals[totals.length - 1];
+    var prev = totals[totals.length - 2];
+    var pct = prev > 0 ? Math.round((last - prev) / prev * 100) : 0;
+    var momEl = document.getElementById('kpi-mom');
+    momEl.textContent = (pct >= 0 ? '+' : '') + pct + '%';
+    momEl.className = 'kpi-value ' + (pct > 0 ? 'up' : pct < 0 ? 'down' : '');
+  }
+
+  // 連續下降月數
+  var streak = 0;
+  for (var i = totals.length - 1; i >= 1; i--) {
+    if (totals[i] < totals[i-1]) streak++;
+    else break;
+  }
+  document.getElementById('kpi-streak').textContent = streak + ' 個月';
+
+  // 峰值月
+  var peakIdx = totals.indexOf(Math.max.apply(null, totals));
+  document.getElementById('kpi-peak-month').textContent = months[peakIdx];
+
+  // 全域最熱時段
+  var slotCounts = new Array(12).fill(0);
+  allFeatures.forEach(function(f) {
+    var s = parseInt(f.properties.time_slot) || 0;
+    if (s >= 0 && s < 12) slotCounts[s]++;
+  });
+  var peakSlot = slotCounts.indexOf(Math.max.apply(null, slotCounts));
+  document.getElementById('kpi-peak-slot').textContent = SLOT_LABELS[peakSlot];
+
+  var chartDefaults = {
+    color: '#8b949e',
+    borderColor: '#30363d'
+  };
+  Chart.defaults.color = '#8b949e';
+
+  // ── 折線圖：月趨勢 ──
+  if (chartTrend) chartTrend.destroy();
+  chartTrend = new Chart(document.getElementById('chart-trend'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [{
+        label: '通報數',
+        data: totals,
+        borderColor: '#e74c3c',
+        backgroundColor: 'rgba(231,76,60,.1)',
+        pointBackgroundColor: '#e74c3c',
+        pointRadius: 4, pointHoverRadius: 6,
+        tension: 0.3, fill: true, borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // ── 橫條圖：時段分布 ──
+  var bandTotals = [0,0,0,0];
+  allFeatures.forEach(function(f) {
+    bandTotals[slotToBand(parseInt(f.properties.time_slot) || 0)]++;
+  });
+  if (chartSlot) chartSlot.destroy();
+  chartSlot = new Chart(document.getElementById('chart-slot'), {
+    type: 'bar',
+    data: {
+      labels: BAND_LABELS,
+      datasets: [{
+        data: bandTotals,
+        backgroundColor: BAND_COLORS.map(function(c) { return c + 'cc'; }),
+        borderColor: BAND_COLORS,
+        borderWidth: 1, borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' }, beginAtZero: true },
+        y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // ── 堆疊橫條圖：月份 × 時段 ──
+  var stackDatasets = BAND_LABELS.map(function(label, b) {
+    return {
+      label: label,
+      data: months.map(function(m) { return monthMap[m].bands[b]; }),
+      backgroundColor: BAND_COLORS[b] + 'cc',
+      borderColor: BAND_COLORS[b],
+      borderWidth: 1
+    };
+  });
+  if (chartStack) chartStack.destroy();
+  chartStack = new Chart(document.getElementById('chart-stack'), {
+    type: 'bar',
+    data: { labels: months, datasets: stackDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: true, position: 'bottom',
+          labels: { color: '#8b949e', boxWidth: 10, font: { size: 10 }, padding: 8 }
+        }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' } },
+        y: { stacked: true, ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+document.getElementById('analytics-btn').addEventListener('click', function() {
+  document.getElementById('report-panel').classList.add('open');
+  if (allFeatures.length > 0) renderReportCharts();
+});
+document.getElementById('report-close').addEventListener('click', function() {
+  document.getElementById('report-panel').classList.remove('open');
+});
 
 (function() {
   var link = document.getElementById('report-link');

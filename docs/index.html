@@ -327,17 +327,31 @@ function initLayers() {
     }
   });
 
+  // 外暈光環（比主圓大一圈，隨數量擴張）
+  map.addLayer({
+    id: 'layer-cluster-glow', type: 'circle', source: 'reports',
+    filter: ['has', 'point_count'],
+    layout: { visibility: 'visible' },
+    paint: {
+      'circle-color': ['step', ['get', 'point_count'], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-radius': ['step', ['get', 'point_count'], 28, 5, 44, 15, 62, 30, 82],
+      'circle-opacity': ['step', ['get', 'point_count'], 0.12, 5, 0.15, 15, 0.18, 30, 0.22],
+      'circle-blur': 0.7,
+      'circle-stroke-width': 0
+    }
+  });
+
   map.addLayer({
     id: 'layer-clusters', type: 'circle', source: 'reports',
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
       'circle-color': ['step', ['get', 'point_count'], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
-      'circle-radius': ['step', ['get', 'point_count'], 20, 5, 28, 15, 36, 30, 44],
-      'circle-opacity': 0.88,
-      'circle-stroke-width': 2.5,
-      'circle-stroke-color': 'rgba(255,255,255,.55)',
-      'circle-blur': ['step', ['get', 'point_count'], 0.08, 15, 0.15, 30, 0.22]
+      'circle-radius': ['step', ['get', 'point_count'], 18, 5, 30, 15, 44, 30, 58],
+      'circle-opacity': 0.92,
+      'circle-stroke-width': ['step', ['get', 'point_count'], 2, 5, 2.5, 15, 3, 30, 3.5],
+      'circle-stroke-color': 'rgba(255,255,255,.65)',
+      'circle-blur': 0
     }
   });
 
@@ -416,9 +430,9 @@ function esc(s) {
 }
 
 var LAYER_VIS = {
-  cluster: { 'layer-heatmap': 'none',    'layer-clusters': 'visible', 'layer-cluster-count': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible' },
-  heatmap: { 'layer-heatmap': 'visible', 'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none'    },
-  points:  { 'layer-heatmap': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'visible', 'layer-points': 'visible' }
+  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-cluster-count': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible' },
+  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none'    },
+  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'visible', 'layer-points': 'visible' }
 };
 
 function setViewMode(mode) {
@@ -432,6 +446,7 @@ function setViewMode(mode) {
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
+  map.triggerRepaint();
 }
 
 document.getElementById('btn-cluster').addEventListener('click', function() { setViewMode('cluster'); });
@@ -483,6 +498,12 @@ function applyData(features) {
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(features);
   document.getElementById('loading').classList.add('hidden');
+  // clustering 在 Web Worker 非同步計算，強制重繪確保首次顯示
+  map.once('sourcedata', function(e) {
+    if (e.sourceId === 'reports' && map.isSourceLoaded('reports')) {
+      map.triggerRepaint();
+    }
+  });
 }
 
 function loadData() {

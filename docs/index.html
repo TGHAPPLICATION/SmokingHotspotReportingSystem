@@ -348,17 +348,16 @@ function initLayers() {
     id: 'layer-heatmap', type: 'heatmap', source: 'reports-heat',
     layout: { visibility: 'none' },
     paint: {
-      // 每點權重壓低，讓萬筆資料不會立刻飽和
-      'heatmap-weight': 0.15,
-      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 13, 1, 15, 2],
+      'heatmap-weight': 0.4,
+      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 13, 1.5, 15, 3],
       'heatmap-color': [
         'interpolate', ['linear'], ['heatmap-density'],
         0,    'rgba(0,0,0,0)',
-        0.1,  'rgba(33,102,172,0.5)',
-        0.3,  'rgb(103,169,207)',
-        0.55, 'rgb(253,219,199)',
-        0.75, 'rgb(239,138,98)',
-        0.9,  'rgb(217,72,1)',
+        0.05, 'rgba(33,102,172,0.5)',
+        0.2,  'rgb(103,169,207)',
+        0.4,  'rgb(253,219,199)',
+        0.6,  'rgb(239,138,98)',
+        0.8,  'rgb(217,72,1)',
         1,    'rgb(178,24,43)'
       ],
       // 半徑壓小，拉近才放大，讓熱點保持空間獨立

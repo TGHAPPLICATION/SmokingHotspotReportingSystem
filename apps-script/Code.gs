@@ -31,6 +31,20 @@ function doGet(e) {
     return getSmokingZonesJson();
   }
 
+  if (action === 'clearSmokingZonesCache') {
+    CacheService.getScriptCache().remove(SMOKING_ZONE_CACHE_KEY);
+    return buildJsonResponse({ cleared: true });
+  }
+
+  if (action === 'debugSmokingZones') {
+    var url = 'https://data.taipei/api/v1/dataset/' + SMOKING_ZONE_DATASET_ID +
+              '?scope=resourceAquire&limit=2&offset=0';
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    var body = JSON.parse(resp.getContentText());
+    var rows = (body.result || body).results || [];
+    return buildJsonResponse({ fields: rows.length > 0 ? Object.keys(rows[0]) : [], sample: rows[0] || null });
+  }
+
   // 回傳表單 HTML
   return HtmlService
     .createHtmlOutputFromFile('Form')
@@ -151,8 +165,23 @@ function getSmokingZonesJson() {
 
   var features = [];
   allRows.forEach(function(row) {
-    var lng = parseFloat(row['經度'] || row['X'] || row['座標X'] || row['longitude'] || '');
-    var lat = parseFloat(row['緯度'] || row['Y'] || row['座標Y'] || row['latitude']  || '');
+    // 優先用已知欄位名
+    var lng = parseFloat(row['經度'] || row['X'] || row['座標X'] || row['longitude'] || row['WGS84經度'] || row['座標-WGS84-X'] || '');
+    var lat = parseFloat(row['緯度'] || row['Y'] || row['座標Y'] || row['latitude']  || row['WGS84緯度'] || row['座標-WGS84-Y'] || '');
+
+    // 若仍找不到，掃描所有欄位，以數值範圍判斷
+    if (isNaN(lng) || isNaN(lat)) {
+      var lngCand = null, latCand = null;
+      var keys = Object.keys(row);
+      for (var k = 0; k < keys.length; k++) {
+        var v = parseFloat(row[keys[k]]);
+        if (isNaN(v)) continue;
+        if (v >= 121.4 && v <= 121.7) lngCand = v;
+        if (v >= 24.9  && v <= 25.3)  latCand  = v;
+      }
+      if (lngCand !== null && latCand !== null) { lng = lngCand; lat = latCand; }
+    }
+
     if (isNaN(lng) || isNaN(lat)) return;
     if (lat < 24.9 || lat > 25.3 || lng < 121.4 || lng > 121.7) return;
     features.push({

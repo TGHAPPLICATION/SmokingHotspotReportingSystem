@@ -455,7 +455,7 @@
     <!-- 合法吸菸區切換 -->
     <div class="zone-toggle">
       <button class="zone-toggle-btn" id="zone-toggle-btn" title="顯示／隱藏合法吸菸區">
-        <span class="zone-toggle-icon">▲</span>
+        <span class="zone-toggle-icon">🚬</span>
         <span class="zone-toggle-label">合法吸菸區<br><span class="zone-toggle-count" id="zone-count">載入中…</span></span>
       </button>
     </div>
@@ -680,50 +680,49 @@ function initLayers() {
   });
 
   // ── 合法吸菸區圖層 ──
-  (function() {
-    var size = 20;
-    var canvas = document.createElement('canvas');
-    canvas.width = size; canvas.height = size;
-    var ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, size, size);
-    ctx.beginPath();
-    ctx.moveTo(size / 2, 1);
-    ctx.lineTo(size - 1, size - 1);
-    ctx.lineTo(1, size - 1);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(39,174,96,0.85)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    map.addImage('smoking-zone-triangle', ctx.getImageData(0, 0, size, size), { pixelRatio: 1 });
-  })();
-
   map.addSource('smoking-zones', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] }
   });
 
+  // 外光暈
   map.addLayer({
     id: 'layer-smoking-zones-halo', type: 'circle', source: 'smoking-zones',
     layout: { visibility: 'none' },
     paint: {
-      'circle-radius': 14,
-      'circle-color': '#27ae60',
-      'circle-opacity': 0.12,
-      'circle-stroke-width': 0
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 16, 17, 22],
+      'circle-color': 'rgba(39,174,96,0)',
+      'circle-stroke-color': 'rgba(39,174,96,0.25)',
+      'circle-stroke-width': 6,
+      'circle-blur': 0.5
     }
   });
 
+  // 空心綠圓
   map.addLayer({
-    id: 'layer-smoking-zones', type: 'symbol', source: 'smoking-zones',
+    id: 'layer-smoking-zones', type: 'circle', source: 'smoking-zones',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 14, 9, 17, 13],
+      'circle-color': 'rgba(39,174,96,0.12)',
+      'circle-stroke-color': '#27ae60',
+      'circle-stroke-width': 2,
+      'circle-stroke-opacity': 0.95
+    }
+  });
+
+  // 香菸 emoji 文字
+  map.addLayer({
+    id: 'layer-smoking-zones-label', type: 'symbol', source: 'smoking-zones',
     layout: {
       visibility: 'none',
-      'icon-image': 'smoking-zone-triangle',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.7, 14, 1.0, 17, 1.4],
-      'icon-allow-overlap': true,
-      'icon-ignore-placement': false
-    }
+      'text-field': '🚬',
+      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 8, 14, 12, 17, 16],
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+      'text-anchor': 'center'
+    },
+    paint: { 'text-opacity': 0.9 }
   });
 
   map.on('click', 'layer-smoking-zones', function(e) {
@@ -732,15 +731,15 @@ function initLayers() {
     new maplibregl.Popup({ offset: 14, maxWidth: '240px' })
       .setLngLat(coords)
       .setHTML(
-        '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">▲ 合法吸菸區</div>' +
+        '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">🚬 合法吸菸區</div>' +
         (props.name    ? '<div class="popup-addr">🏷 ' + esc(props.name) + '</div>' : '') +
         (props.address ? '<div class="popup-desc">📍 ' + esc(props.address) + '</div>' : '') +
-        (props.type    ? '<div class="popup-time" style="color:#6e7681;font-size:.7rem;margin-top:3px;">🏷 ' + esc(props.type) + '</div>' : '') +
+        (props.type    ? '<div class="popup-time" style="color:#6e7681;font-size:.7rem;margin-top:3px;">' + esc(props.type) + '</div>' : '') +
         (props.hours   ? '<div class="popup-time">⏰ ' + esc(props.hours) + '</div>' : '')
       ).addTo(map);
   });
 
-  ['layer-smoking-zones'].forEach(function(id) {
+  ['layer-smoking-zones', 'layer-smoking-zones-label'].forEach(function(id) {
     map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
@@ -1231,7 +1230,7 @@ function loadSmokingZones() {
 }
 
 function setSmokingZoneVisibility(visible) {
-  ['layer-smoking-zones-halo', 'layer-smoking-zones'].forEach(function(id) {
+  ['layer-smoking-zones-halo', 'layer-smoking-zones', 'layer-smoking-zones-label'].forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
   });
   var btn = document.getElementById('zone-toggle-btn');

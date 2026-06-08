@@ -18,71 +18,70 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch smoking zones from data.taipei
+      - name: Fetch and convert smoking zones
         run: |
-          DATASET_ID="8b2fcdeb-d14b-46c4-92d8-66ad07b96a91"
-          OUTPUT="docs/smoking-zones.json"
-          TMPFILE=$(mktemp)
+          python3 << 'PYEOF'
+          import json, sys, urllib.request, datetime
 
-          echo "::group::Fetching page 1"
-          HTTP_CODE=$(curl -sSL \
-            -w "%{http_code}" \
-            -o "$TMPFILE" \
-            --retry 3 --retry-delay 5 \
-            -H "User-Agent: Mozilla/5.0 (compatible; GitHub-Actions)" \
-            -H "Accept: application/json" \
-            "https://data.taipei/api/v1/dataset/${DATASET_ID}?scope=resourceAquire&limit=1000&offset=0")
-          echo "HTTP status: $HTTP_CODE"
-          echo "Response size: $(wc -c < "$TMPFILE") bytes"
-          echo "::endgroup::"
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::data.taipei API returned HTTP $HTTP_CODE"
-            cat "$TMPFILE"
-            exit 1
-          fi
-
-          # 印出原始回應供除錯
-          echo "=== RAW RESPONSE (first 3000 chars) ==="
-          head -c 3000 "$TMPFILE"
-          echo ""
-          echo "=== END RAW ==="
-
-          # 驗證是否為合法 JSON
-          python3 -c "import json,sys; json.load(open('$TMPFILE'))" || {
-            echo "::error::Response is not valid JSON:"
-            head -c 500 "$TMPFILE"
-            exit 1
+          DATASET_ID = '8b2fcdeb-d14b-46c4-92d8-66ad07b96a91'
+          OUTPUT     = 'docs/smoking-zones.json'
+          HEADERS    = {
+              'User-Agent': 'Mozilla/5.0 (compatible; GitHub-Actions)',
+              'Accept':     'application/json',
           }
 
-          # 印出欄位名稱供除錯
-          python3 - "$TMPFILE" "$OUTPUT" << 'PYEOF'
-          import json, sys, datetime
+          def fetch(url):
+              req = urllib.request.Request(url, headers=HEADERS)
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.loads(r.read().decode('utf-8'))
 
-          src, dst = sys.argv[1], sys.argv[2]
-          with open(src, encoding='utf-8') as f:
-              body = json.load(f)
+          # ── Step 1：取得 dataset metadata ──────────────────────
+          print('=== Step 1: dataset metadata')
+          meta_url = f'https://data.taipei/api/v1/dataset/{DATASET_ID}'
+          meta = fetch(meta_url)
+          print(json.dumps(meta, ensure_ascii=False)[:2000])
 
-          # API 可能直接回傳陣列，或包在物件內
-          if isinstance(body, list):
-              all_rows = body
-          else:
-              result   = body.get('result', body)
-              all_rows = result.get('results', result.get('data', result if isinstance(result, list) else []))
-          total    = len(all_rows)
-          print(f'Rows in page: {len(all_rows)}, total reported: {total}', flush=True)
+          result    = meta.get('result', meta) if isinstance(meta, dict) else {}
+          resources = result.get('resources', []) if isinstance(result, dict) else []
+          print(f'Resources found: {len(resources)}')
 
-          if all_rows:
-              print(f'=== Fields: {list(all_rows[0].keys())}', flush=True)
-              print(f'=== First row (full):', flush=True)
-              print(json.dumps(all_rows[0], ensure_ascii=False, indent=2), flush=True)
-          else:
-              print('=== all_rows is EMPTY — API returned no data', flush=True)
-              print(f'=== Raw body type: {type(body)}, keys: {list(body.keys()) if isinstance(body, dict) else "N/A"}', flush=True)
+          # ── Step 2：對每個 resource 嘗試抓資料 ─────────────────
+          all_rows = []
+          for r in resources:
+              rid  = r.get('id') or r.get('rid', '')
+              fmt  = r.get('format', r.get('name', '?'))
+              print(f'  Trying resource id={rid} format={fmt}')
+              if not rid:
+                  continue
+              url = f'https://data.taipei/api/v1/dataset/{rid}?scope=resourceAquire&limit=1000&offset=0'
+              try:
+                  body = fetch(url)
+              except Exception as e:
+                  print(f'    ERROR: {e}'); continue
 
+              if isinstance(body, list):
+                  rows = body
+              elif isinstance(body, dict):
+                  res  = body.get('result', body)
+                  rows = res.get('results', res.get('data', [])) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+              else:
+                  rows = []
+
+              print(f'    rows: {len(rows)}')
+              if rows:
+                  print(f'    fields: {list(rows[0].keys())}')
+                  print(f'    sample: {json.dumps(rows[0], ensure_ascii=False)[:400]}')
+                  all_rows.extend(rows)
+
+          print(f'Total rows: {len(all_rows)}')
+          if not all_rows:
+              print('::error::No rows from any resource — check metadata above')
+              sys.exit(1)
+
+          # ── Step 3：解析座標 ────────────────────────────────────
           def find_coords(row):
               lng = lat = None
-              for k in ('經度','X座標','座標X','longitude','WGS84經度','座標-WGS84-X','lng','long'):
+              for k in ('經度','X座標','座標X','longitude','WGS84經度','座標-WGS84-X','lng'):
                   v = row.get(k)
                   if v not in (None, ''):
                       try: lng = float(v); break
@@ -92,13 +91,13 @@ jobs:
                   if v not in (None, ''):
                       try: lat = float(v); break
                       except: pass
-              # 掃描所有欄位以數值範圍判斷
+              # 若仍找不到，掃描所有欄位以數值範圍判斷
               if lng is None or lat is None:
                   for v in row.values():
                       try:
                           f = float(v)
-                          if 121.4 <= f <= 121.7: lng = f
-                          elif 24.9  <= f <= 25.3:  lat = f
+                          if lng is None and 121.4 <= f <= 121.7: lng = f
+                          if lat is None and 24.9  <= f <= 25.3:  lat = f
                       except: pass
               return lng, lat
 
@@ -107,11 +106,9 @@ jobs:
           for row in all_rows:
               lng, lat = find_coords(row)
               if lng is None or lat is None:
-                  skipped += 1
-                  continue
+                  skipped += 1; continue
               if not (24.9 <= lat <= 25.3 and 121.4 <= lng <= 121.7):
-                  skipped += 1
-                  continue
+                  skipped += 1; continue
               features.append({
                   'type': 'Feature',
                   'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
@@ -122,40 +119,24 @@ jobs:
                   }
               })
 
-          print(f'Valid features: {len(features)}, skipped: {skipped}', flush=True)
-
-          if len(features) == 0 and len(all_rows) > 0:
-              print('=== All rows skipped. Numeric fields in first row:', flush=True)
+          print(f'Valid features: {len(features)}, skipped: {skipped}')
+          if not features:
+              print('=== Numeric fields in first row:')
               for k, v in all_rows[0].items():
-                  try:
-                      f = float(v)
-                      print(f'  {k!r}: {f}', flush=True)
-                  except (ValueError, TypeError):
-                      pass
-              print('::error::No valid coordinates found — fix field names above', flush=True)
+                  try: print(f'  {k!r}: {float(v)}')
+                  except: pass
+              print('::error::No valid coordinates — check field names above')
               sys.exit(1)
 
           geojson = {
               'type': 'FeatureCollection',
-              'generated': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+              'generated': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
               'features': features
           }
-          with open(dst, 'w', encoding='utf-8') as f:
+          with open(OUTPUT, 'w', encoding='utf-8') as f:
               json.dump(geojson, f, ensure_ascii=False, separators=(',', ':'))
-          print(f'Written to {dst}', flush=True)
+          print(f'Written {len(features)} features to {OUTPUT}')
           PYEOF
-
-      - name: Verify output
-        run: |
-          python3 -c "
-          import json
-          with open('docs/smoking-zones.json') as f:
-              d = json.load(f)
-          n = len(d['features'])
-          print(f'Features written: {n}')
-          if n == 0:
-              raise SystemExit('No features — something went wrong')
-          "
 
       - name: Commit and push if changed
         run: |

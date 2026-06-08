@@ -67,8 +67,12 @@ jobs:
           print(f'Rows in page: {len(all_rows)}, total reported: {total}', flush=True)
 
           if all_rows:
-              print(f'Fields: {list(all_rows[0].keys())}', flush=True)
-              print(f'Sample: {json.dumps(all_rows[0], ensure_ascii=False)[:300]}', flush=True)
+              print(f'=== Fields: {list(all_rows[0].keys())}', flush=True)
+              print(f'=== First row (full):', flush=True)
+              print(json.dumps(all_rows[0], ensure_ascii=False, indent=2), flush=True)
+          else:
+              print('=== all_rows is EMPTY — API returned no data', flush=True)
+              print(f'=== Raw body type: {type(body)}, keys: {list(body.keys()) if isinstance(body, dict) else "N/A"}', flush=True)
 
           def find_coords(row):
               lng = lat = None
@@ -115,7 +119,14 @@ jobs:
           print(f'Valid features: {len(features)}, skipped: {skipped}', flush=True)
 
           if len(features) == 0 and len(all_rows) > 0:
-              print('::error::All rows skipped — check field names above', flush=True)
+              print('=== All rows skipped. Numeric fields in first row:', flush=True)
+              for k, v in all_rows[0].items():
+                  try:
+                      f = float(v)
+                      print(f'  {k!r}: {f}', flush=True)
+                  except (ValueError, TypeError):
+                      pass
+              print('::error::No valid coordinates found — fix field names above', flush=True)
               sys.exit(1)
 
           geojson = {

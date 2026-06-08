@@ -27,6 +27,10 @@ function doGet(e) {
     return getReportsJson(e);
   }
 
+  if (action === 'getSmokingZones') {
+    return getSmokingZonesJson();
+  }
+
   // 回傳表單 HTML
   return HtmlService
     .createHtmlOutputFromFile('Form')
@@ -111,6 +115,60 @@ function getReportsJson(e) {
   var output = ContentService.createTextOutput(geojson)
     .setMimeType(ContentService.MimeType.JSON);
   return output;
+}
+
+// ── 合法吸菸區（台北市開放資料代理）────────────────────────────
+var SMOKING_ZONE_DATASET_ID = '8b2fcdeb-d14b-46c4-92d8-66ad07b96a91';
+var SMOKING_ZONE_CACHE_KEY  = 'smoking_zones_geojson';
+var SMOKING_ZONE_CACHE_SECS = 21600; // 6 小時
+
+function getSmokingZonesJson() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get(SMOKING_ZONE_CACHE_KEY);
+  if (cached) {
+    return ContentService.createTextOutput(cached).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var allRows = [];
+  var limit   = 1000;
+  var offset  = 0;
+  var total   = null;
+
+  do {
+    var url = 'https://data.taipei/api/v1/dataset/' + SMOKING_ZONE_DATASET_ID +
+              '?scope=resourceAquire&limit=' + limit + '&offset=' + offset;
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) break;
+
+    var body   = JSON.parse(resp.getContentText());
+    var result = body.result || body;
+    var rows   = result.results || result.data || [];
+    allRows    = allRows.concat(rows);
+
+    if (total === null) total = parseInt(result.count) || 0;
+    offset += limit;
+  } while (rows.length === limit && offset < total);
+
+  var features = [];
+  allRows.forEach(function(row) {
+    var lng = parseFloat(row['經度'] || row['X'] || row['座標X'] || row['longitude'] || '');
+    var lat = parseFloat(row['緯度'] || row['Y'] || row['座標Y'] || row['latitude']  || '');
+    if (isNaN(lng) || isNaN(lat)) return;
+    if (lat < 24.9 || lat > 25.3 || lng < 121.4 || lng > 121.7) return;
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: {
+        name:    row['名稱']    || row['地點名稱'] || row['場所名稱'] || '',
+        address: row['地址']    || row['住址']     || row['位置']     || '',
+        type:    row['類型']    || row['場所類型'] || row['吸菸區類型'] || ''
+      }
+    });
+  });
+
+  var geojson = JSON.stringify({ type: 'FeatureCollection', features: features });
+  try { cache.put(SMOKING_ZONE_CACHE_KEY, geojson, SMOKING_ZONE_CACHE_SECS); } catch(e) {}
+  return ContentService.createTextOutput(geojson).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ── 工具函式 ─────────────────────────────────────────────────

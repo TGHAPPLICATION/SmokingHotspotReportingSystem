@@ -486,7 +486,7 @@
 <script>
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
-var SMOKING_ZONE_API = 'https://data.taipei/api/v1/dataset/8b2fcdeb-d14b-46c4-92d8-66ad07b96a91?scope=resourceAquire&limit=1000&offset=0';
+var SMOKING_ZONE_API = API_URL + '?action=getSmokingZones';
 var TAIPEI_CENTER = [121.5654, 25.0330];
 var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
 
@@ -1201,62 +1201,27 @@ document.getElementById('report-close').addEventListener('click', function() {
 })();
 
 // ── 合法吸菸區 ──────────────────────────────────────────────────
-function parseSmokingZoneFeatures(results) {
-  var features = [];
-  results.forEach(function(row) {
-    // 欄位名稱可能因資料集版本不同，逐一嘗試
-    var lng = parseFloat(row['經度'] || row['X'] || row['座標X'] || row['longitude'] || row['lng'] || '');
-    var lat = parseFloat(row['緯度'] || row['Y'] || row['座標Y'] || row['latitude'] || row['lat'] || '');
-    if (isNaN(lng) || isNaN(lat)) return;
-    if (lat < 24.9 || lat > 25.3 || lng < 121.4 || lng > 121.7) return; // 台北範圍
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: {
-        name:    row['名稱'] || row['地點名稱'] || row['場所名稱'] || '',
-        address: row['地址'] || row['住址'] || row['位置'] || '',
-        type:    row['類型'] || row['場所類型'] || row['吸菸區類型'] || ''
-      }
-    });
-  });
-  return features;
-}
-
-function fetchAllSmokingZones(url, accumulated, resolve, reject) {
-  fetch(url)
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(data) {
-      var result = data.result || data;
-      var results = result.results || result.data || [];
-      accumulated = accumulated.concat(results);
-      // 若還有下一頁就繼續取
-      var count = result.count || 0;
-      var limit = result.limit || 1000;
-      var offset = result.offset || 0;
-      if (count > 0 && offset + limit < count) {
-        var nextUrl = SMOKING_ZONE_API.replace(/offset=\d+/, 'offset=' + (offset + limit));
-        fetchAllSmokingZones(nextUrl, accumulated, resolve, reject);
-      } else {
-        resolve(accumulated);
-      }
-    })
-    .catch(reject);
-}
-
 function loadSmokingZones() {
   document.getElementById('zone-count').textContent = '載入中…';
-  fetchAllSmokingZones(SMOKING_ZONE_API, [], function(rows) {
-    var features = parseSmokingZoneFeatures(rows);
-    var fc = { type: 'FeatureCollection', features: features };
-    if (map.getSource('smoking-zones')) map.getSource('smoking-zones').setData(fc);
-    smokingZoneLoaded = true;
-    document.getElementById('zone-count').textContent = features.length + ' 處';
-    console.log('[smoking-zones] loaded', features.length, 'zones');
-    if (smokingZoneVisible) setSmokingZoneVisibility(true);
-  }, function(err) {
-    console.warn('[smoking-zones] 載入失敗', err);
-    document.getElementById('zone-count').textContent = '載入失敗';
-  });
+  fetch(SMOKING_ZONE_API, { redirect: 'follow' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(geojson) {
+      var features = (geojson.features || []).filter(function(f) {
+        var c = f.geometry && f.geometry.coordinates;
+        return c && !isNaN(c[0]) && !isNaN(c[1]);
+      });
+      if (map.getSource('smoking-zones')) {
+        map.getSource('smoking-zones').setData({ type: 'FeatureCollection', features: features });
+      }
+      smokingZoneLoaded = true;
+      document.getElementById('zone-count').textContent = features.length + ' 處';
+      console.log('[smoking-zones] loaded', features.length, 'zones');
+      if (smokingZoneVisible) setSmokingZoneVisibility(true);
+    })
+    .catch(function(err) {
+      console.warn('[smoking-zones] 載入失敗', err);
+      document.getElementById('zone-count').textContent = '載入失敗';
+    });
 }
 
 function setSmokingZoneVisibility(visible) {

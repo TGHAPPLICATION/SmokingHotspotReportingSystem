@@ -42,6 +42,12 @@ jobs:
             exit 1
           fi
 
+          # 印出原始回應供除錯
+          echo "=== RAW RESPONSE (first 3000 chars) ==="
+          head -c 3000 "$TMPFILE"
+          echo ""
+          echo "=== END RAW ==="
+
           # 驗證是否為合法 JSON
           python3 -c "import json,sys; json.load(open('$TMPFILE'))" || {
             echo "::error::Response is not valid JSON:"

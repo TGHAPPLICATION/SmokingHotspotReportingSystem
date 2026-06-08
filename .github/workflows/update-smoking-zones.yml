@@ -57,9 +57,13 @@ jobs:
           with open(src, encoding='utf-8') as f:
               body = json.load(f)
 
-          result   = body.get('result', body)
-          all_rows = result.get('results', result.get('data', []))
-          total    = int(result.get('count', 0))
+          # API 可能直接回傳陣列，或包在物件內
+          if isinstance(body, list):
+              all_rows = body
+          else:
+              result   = body.get('result', body)
+              all_rows = result.get('results', result.get('data', result if isinstance(result, list) else []))
+          total    = len(all_rows)
           print(f'Rows in page: {len(all_rows)}, total reported: {total}', flush=True)
 
           if all_rows:

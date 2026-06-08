@@ -1009,31 +1009,61 @@ function applyData(features) {
   document.getElementById('loading').classList.add('hidden');
 }
 
+// JSONP 載入（繞過 Apps Script CORS redirect 問題）
+var _jsonpTimer = null;
+window._gasReportsCallback = function(geojson) {
+  if (_jsonpTimer) { clearTimeout(_jsonpTimer); _jsonpTimer = null; }
+  var tag = document.getElementById('_jsonp_reports');
+  if (tag) tag.parentNode.removeChild(tag);
+  try {
+    if (!geojson.features) throw new Error('缺少 features');
+    var features = normalizeFeatures(geojson.features);
+    setDataSource('live', '即時資料 • ' + features.length + ' 筆');
+    applyData(features);
+    fitToFeatures(features);
+  } catch(e) {
+    console.warn('JSONP 資料解析失敗：', e);
+    loadMockData();
+  }
+};
+
+function loadMockData() {
+  setDataSource('mock', '示範資料');
+  fetch(MOCK_URL)
+    .then(function(r) { return r.json(); })
+    .then(function(geojson) { applyData(normalizeFeatures(geojson.features || [])); })
+    .catch(function(e) {
+      setDataSource('err', '載入失敗');
+      document.getElementById('loading').classList.add('hidden');
+      console.error(e);
+    });
+}
+
 function loadData() {
   document.getElementById('loading').classList.remove('hidden');
   setDataSource('', '載入中…');
-  fetch(API_URL + '?action=getReports', { redirect: 'follow' })
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-    .then(function(text) {
-      var geojson = JSON.parse(text);
-      if (!geojson.features) throw new Error('缺少 features');
-      var features = normalizeFeatures(geojson.features);
-      setDataSource('live', '即時資料 • ' + features.length + ' 筆');
-      applyData(features);
-      fitToFeatures(features);
-    })
-    .catch(function(err) {
-      console.warn('API 載入失敗，改用 mock：', err);
-      setDataSource('mock', '示範資料');
-      fetch(MOCK_URL)
-        .then(function(r) { return r.json(); })
-        .then(function(geojson) { applyData(normalizeFeatures(geojson.features || [])); })
-        .catch(function(e) {
-          setDataSource('err', '載入失敗');
-          document.getElementById('loading').classList.add('hidden');
-          console.error(e);
-        });
-    });
+
+  // 移除上次殘留的 script tag
+  var old = document.getElementById('_jsonp_reports');
+  if (old) old.parentNode.removeChild(old);
+
+  // 逾時 8 秒 fallback mock
+  _jsonpTimer = setTimeout(function() {
+    console.warn('JSONP 逾時，改用 mock');
+    loadMockData();
+  }, 8000);
+
+  var script = document.createElement('script');
+  script.id  = '_jsonp_reports';
+  script.src = API_URL + '?action=getReports&callback=_gasReportsCallback';
+  script.onerror = function() {
+    clearTimeout(_jsonpTimer); _jsonpTimer = null;
+    console.warn('JSONP script 載入失敗，改用 mock');
+    loadMockData();
+  };
+  document.head.appendChild(script);
+}
+
 }
 
 document.getElementById('locate-btn').addEventListener('click', function() {

@@ -97,7 +97,8 @@ function saveReport(data) {
 
 // ── 取得回報資料（GeoJSON）───────────────────────────────────
 function getReportsJson(e) {
-  var slot = e && e.parameter && e.parameter.slot;
+  var slot     = e && e.parameter && e.parameter.slot;
+  var callback = e && e.parameter && e.parameter.callback; // JSONP support
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var sheet = getOrCreateSheet(ss);
   var rows = sheet.getDataRange().getValues();
@@ -126,9 +127,14 @@ function getReportsJson(e) {
   }
 
   var geojson = JSON.stringify({ type: 'FeatureCollection', features: features });
-  var output = ContentService.createTextOutput(geojson)
-    .setMimeType(ContentService.MimeType.JSON);
-  return output;
+
+  // JSONP：用 script tag 載入可繞過 CORS
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + '(' + geojson + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(geojson).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ── 合法吸菸區（台北市開放資料代理）────────────────────────────

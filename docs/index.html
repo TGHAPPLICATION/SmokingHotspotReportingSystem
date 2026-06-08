@@ -486,7 +486,7 @@
 <script>
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
-var SMOKING_ZONE_API = API_URL + '?action=getSmokingZones';
+var SMOKING_ZONE_API = './smoking-zones.json';
 var TAIPEI_CENTER = [121.5654, 25.0330];
 var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
 
@@ -1214,7 +1214,12 @@ function loadSmokingZones() {
         map.getSource('smoking-zones').setData({ type: 'FeatureCollection', features: features });
       }
       smokingZoneLoaded = true;
-      document.getElementById('zone-count').textContent = features.length + ' 處';
+      var countEl = document.getElementById('zone-count');
+      if (features.length === 0) {
+        countEl.textContent = '資料更新中…';
+      } else {
+        countEl.textContent = features.length + ' 處';
+      }
       console.log('[smoking-zones] loaded', features.length, 'zones');
       if (smokingZoneVisible) setSmokingZoneVisibility(true);
     })

@@ -1,0 +1,128 @@
+name: Update Smoking Zones Data
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'   # 每週一 02:00 UTC（台北時間週一 10:00）
+  workflow_dispatch:        # 允許手動觸發
+
+jobs:
+  fetch-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch smoking zones from data.taipei
+        run: |
+          python3 << 'EOF'
+          import json, urllib.request, sys
+
+          DATASET_ID = '8b2fcdeb-d14b-46c4-92d8-66ad07b96a91'
+          BASE_URL   = f'https://data.taipei/api/v1/dataset/{DATASET_ID}?scope=resourceAquire&limit=1000&offset='
+
+          all_rows = []
+          offset   = 0
+          total    = None
+
+          while True:
+              url = BASE_URL + str(offset)
+              req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  body = json.loads(resp.read())
+
+              result = body.get('result', body)
+              rows   = result.get('results', result.get('data', []))
+              all_rows.extend(rows)
+
+              if total is None:
+                  total = int(result.get('count', 0))
+              offset += len(rows)
+              if not rows or offset >= total:
+                  break
+
+          print(f'Fetched {len(all_rows)} rows, total={total}', file=sys.stderr)
+
+          if all_rows:
+              sample_keys = list(all_rows[0].keys())
+              print(f'Fields: {sample_keys}', file=sys.stderr)
+
+          features = []
+          for row in all_rows:
+              # 嘗試已知欄位名
+              lng = None
+              lat = None
+              for key in ('經度', 'X', '座標X', 'longitude', 'WGS84經度', '座標-WGS84-X'):
+                  v = row.get(key)
+                  if v not in (None, ''):
+                      try:
+                          lng = float(v); break
+                      except (ValueError, TypeError):
+                          pass
+              for key in ('緯度', 'Y', '座標Y', 'latitude', 'WGS84緯度', '座標-WGS84-Y'):
+                  v = row.get(key)
+                  if v not in (None, ''):
+                      try:
+                          lat = float(v); break
+                      except (ValueError, TypeError):
+                          pass
+
+              # 若仍找不到，掃描所有欄位以數值範圍判斷
+              if lng is None or lat is None:
+                  for v in row.values():
+                      try:
+                          f = float(v)
+                          if 121.4 <= f <= 121.7:
+                              lng = f
+                          elif 24.9 <= f <= 25.3:
+                              lat = f
+                      except (ValueError, TypeError):
+                          pass
+
+              if lng is None or lat is None:
+                  continue
+              if not (24.9 <= lat <= 25.3 and 121.4 <= lng <= 121.7):
+                  continue
+
+              features.append({
+                  'type': 'Feature',
+                  'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
+                  'properties': {
+                      'name':    row.get('名稱', row.get('地點名稱', row.get('場所名稱', ''))),
+                      'address': row.get('地址', row.get('住址', row.get('位置', ''))),
+                      'type':    row.get('類型', row.get('場所類型', row.get('吸菸區類型', '')))
+                  }
+              })
+
+          print(f'Valid features: {len(features)}', file=sys.stderr)
+
+          geojson = {
+              'type': 'FeatureCollection',
+              'generated': __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+              'features': features
+          }
+          with open('docs/smoking-zones.json', 'w', encoding='utf-8') as f:
+              json.dump(geojson, f, ensure_ascii=False, separators=(',', ':'))
+
+          print('Done.', file=sys.stderr)
+          EOF
+
+      - name: Verify output
+        run: |
+          python3 -c "
+          import json
+          with open('docs/smoking-zones.json') as f:
+              d = json.load(f)
+          print(f'Features: {len(d[\"features\"])}')
+          "
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/smoking-zones.json
+          git diff --cached --quiet && echo "No changes" || \
+            git commit -m "chore: update smoking-zones.json [skip ci]" && \
+            git push

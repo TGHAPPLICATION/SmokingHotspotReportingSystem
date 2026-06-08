@@ -487,6 +487,9 @@
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
 var SMOKING_ZONE_API = './smoking-zones.json';
+var SHEET_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
+var GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+               '/gviz/tq?tqx=responseHandler:_gvizCallback&sheet=SmokingReports';
 var TAIPEI_CENTER = [121.5654, 25.0330];
 var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
 
@@ -1009,20 +1012,53 @@ function applyData(features) {
   document.getElementById('loading').classList.add('hidden');
 }
 
-// JSONP 載入（繞過 Apps Script CORS redirect 問題）
-var _jsonpTimer = null;
-window._gasReportsCallback = function(geojson) {
-  if (_jsonpTimer) { clearTimeout(_jsonpTimer); _jsonpTimer = null; }
-  var tag = document.getElementById('_jsonp_reports');
+// gviz 回應解析：將 Google Visualization table 轉為 GeoJSON features
+function gvizTableToFeatures(table) {
+  var cols = table.cols.map(function(c) { return c.label || c.id; });
+  var idx = {};
+  cols.forEach(function(name, i) { idx[name] = i; });
+
+  // 欄位對應（依 Code.gs COL 定義）
+  var iTs  = idx['timestamp']    !== undefined ? idx['timestamp']    : 1;
+  var iSl  = idx['time_slot']    !== undefined ? idx['time_slot']    : 2;
+  var iLat = idx['lat']          !== undefined ? idx['lat']          : 3;
+  var iLng = idx['lng']          !== undefined ? idx['lng']          : 4;
+  var iAdr = idx['address_input']!== undefined ? idx['address_input']: 6;
+  var iDsc = idx['description']  !== undefined ? idx['description']  : 7;
+
+  var features = [];
+  (table.rows || []).forEach(function(row) {
+    var c = row.c || [];
+    var lat = parseFloat(c[iLat] && c[iLat].v);
+    var lng = parseFloat(c[iLng] && c[iLng].v);
+    if (isNaN(lat) || isNaN(lng)) return;
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: {
+        timestamp:     c[iTs]  ? String(c[iTs].v  || '') : '',
+        time_slot:     c[iSl]  ? parseInt(c[iSl].v) || 0 : 0,
+        address_input: c[iAdr] ? String(c[iAdr].v || '') : '',
+        description:   c[iDsc] ? String(c[iDsc].v || '') : ''
+      }
+    });
+  });
+  return features;
+}
+
+var _gvizTimer = null;
+window._gvizCallback = function(resp) {
+  if (_gvizTimer) { clearTimeout(_gvizTimer); _gvizTimer = null; }
+  var tag = document.getElementById('_gviz_script');
   if (tag) tag.parentNode.removeChild(tag);
   try {
-    if (!geojson.features) throw new Error('缺少 features');
-    var features = normalizeFeatures(geojson.features);
+    if (resp.status !== 'ok') throw new Error('gviz status: ' + resp.status);
+    var features = normalizeFeatures(gvizTableToFeatures(resp.table));
     setDataSource('live', '即時資料 • ' + features.length + ' 筆');
     applyData(features);
     fitToFeatures(features);
   } catch(e) {
-    console.warn('JSONP 資料解析失敗：', e);
+    console.warn('gviz 解析失敗，改用 mock：', e);
     loadMockData();
   }
 };
@@ -1043,22 +1079,21 @@ function loadData() {
   document.getElementById('loading').classList.remove('hidden');
   setDataSource('', '載入中…');
 
-  // 移除上次殘留的 script tag
-  var old = document.getElementById('_jsonp_reports');
+  var old = document.getElementById('_gviz_script');
   if (old) old.parentNode.removeChild(old);
 
-  // 逾時 8 秒 fallback mock
-  _jsonpTimer = setTimeout(function() {
-    console.warn('JSONP 逾時，改用 mock');
+  // 逾時 10 秒 fallback mock
+  _gvizTimer = setTimeout(function() {
+    console.warn('gviz 逾時，改用 mock');
     loadMockData();
-  }, 8000);
+  }, 10000);
 
   var script = document.createElement('script');
-  script.id  = '_jsonp_reports';
-  script.src = API_URL + '?action=getReports&callback=_gasReportsCallback';
+  script.id  = '_gviz_script';
+  script.src = GVIZ_URL;
   script.onerror = function() {
-    clearTimeout(_jsonpTimer); _jsonpTimer = null;
-    console.warn('JSONP script 載入失敗，改用 mock');
+    clearTimeout(_gvizTimer); _gvizTimer = null;
+    console.warn('gviz script 載入失敗，改用 mock');
     loadMockData();
   };
   document.head.appendChild(script);

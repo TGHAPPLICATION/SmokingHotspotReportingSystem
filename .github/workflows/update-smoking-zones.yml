@@ -1,0 +1,215 @@
+name: Update Smoking Zones Data
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'   # 每週一 02:00 UTC（台北時間週一 10:00）
+  workflow_dispatch:
+    inputs:
+      download_url:
+        description: '直接下載 URL（留空使用預設）'
+        required: false
+        default: ''
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # 合法吸菸區直接下載連結（resource ID: acaa0f43-3b92-4241-b5eb-3f7fdd76b74f）
+  DEFAULT_DOWNLOAD_URL: 'https://data.taipei/api/frontstage/tpeod/dataset/resource.download?rid=acaa0f43-3b92-4241-b5eb-3f7fdd76b74f'
+
+jobs:
+  fetch-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch and convert smoking zones
+        env:
+          DOWNLOAD_URL: ${{ github.event.inputs.download_url }}
+        run: |
+          python3 << 'PYEOF'
+          import json, sys, os, urllib.request, urllib.error, datetime, csv, io, re
+
+          DATASET_ID   = '8b2fcdeb-d14b-46c4-92d8-66ad07b96a91'
+          OUTPUT       = 'docs/smoking-zones.json'
+          MANUAL_URL   = os.environ.get('DOWNLOAD_URL', '').strip() or \
+                         os.environ.get('DEFAULT_DOWNLOAD_URL', '').strip()
+
+          HEADERS = {
+              'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept':          'application/json, text/csv, text/plain, */*',
+              'Accept-Language': 'zh-TW,zh;q=0.9',
+              'Referer':         'https://data.taipei/',
+          }
+
+          def fetch(url, timeout=30):
+              req = urllib.request.Request(url, headers=HEADERS)
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return r.read()
+
+          def parse_rows(raw):
+              """嘗試 JSON 或 CSV 解析，回傳 list of dict"""
+              # JSON
+              try:
+                  body = json.loads(raw.decode('utf-8'))
+                  if isinstance(body, list) and body:
+                      return body
+                  if isinstance(body, dict):
+                      for key in ('results', 'data', 'records'):
+                          v = body.get('result', body).get(key, [])
+                          if v: return v
+              except Exception:
+                  pass
+              # CSV
+              for enc in ('utf-8-sig', 'utf-8', 'big5'):
+                  try:
+                      text = raw.decode(enc)
+                      rows = list(csv.DictReader(io.StringIO(text)))
+                      if rows: return rows
+                  except Exception:
+                      pass
+              return []
+
+          # ── 策略 A：使用手動指定 URL ──────────────────────────
+          if MANUAL_URL:
+              print(f'=== Strategy A: manual URL\n  {MANUAL_URL}')
+              try:
+                  raw  = fetch(MANUAL_URL)
+                  rows = parse_rows(raw)
+                  print(f'  rows: {len(rows)}')
+              except Exception as e:
+                  print(f'  failed: {e}'); rows = []
+          else:
+              rows = []
+
+          # ── 策略 B：資料集頁面 HTML 解析，找下載連結 ──────────
+          if not rows:
+              print('=== Strategy B: parse dataset HTML for download links')
+              try:
+                  raw_html = fetch(f'https://data.taipei/dataset/detail?id={DATASET_ID}').decode('utf-8', errors='replace')
+                  print(f'  HTML length: {len(raw_html)}')
+                  # 找 JSON / CSV 下載 URL
+                  candidates = re.findall(
+                      r'https://[^\s"\'<>]+?(?:\.csv|\.json|download|resourceAquire)[^\s"\'<>]*',
+                      raw_html, re.IGNORECASE)
+                  print(f'  URL candidates: {candidates[:8]}')
+                  # 找所有 UUID（可能是 resource ID）
+                  uuids = list(dict.fromkeys(re.findall(
+                      r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+                      raw_html)))
+                  uuids = [u for u in uuids if u != DATASET_ID]
+                  print(f'  Possible resource UUIDs: {uuids[:5]}')
+
+                  for url in candidates[:5]:
+                      try:
+                          r = parse_rows(fetch(url))
+                          if r: rows = r; print(f'  Got {len(r)} rows from {url[:80]}'); break
+                      except Exception as e:
+                          print(f'  {url[:60]}: {e}')
+
+                  if not rows:
+                      for uid in uuids[:5]:
+                          scope_url = f'https://data.taipei/api/v1/dataset/{uid}?scope=resourceAquire&limit=1000'
+                          try:
+                              r = parse_rows(fetch(scope_url))
+                              if r: rows = r; print(f'  Got {len(r)} rows from resource {uid}'); break
+                          except Exception as e:
+                              print(f'  resource {uid}: {e}')
+              except Exception as e:
+                  print(f'  HTML fetch failed: {e}')
+
+          # ── 策略 C：直接 v1 dataset scope=resourceAquire ───────
+          if not rows:
+              print('=== Strategy C: v1 API direct')
+              for url in [
+                  f'https://data.taipei/api/v1/dataset/{DATASET_ID}?scope=resourceAquire&limit=1000',
+                  f'https://data.taipei/api/v1/dataset/{DATASET_ID}',
+              ]:
+                  try:
+                      r = parse_rows(fetch(url))
+                      if r: rows = r; print(f'  Got {len(r)} rows'); break
+                      else:
+                      	print(f'  {url}: 0 rows — raw: {fetch(url)[:200]}')
+                  except Exception as e:
+                      print(f'  {url}: {e}')
+
+          if not rows:
+              print()
+              print('::error::所有策略均失敗。請在 GitHub Actions 手動觸發時填入直接下載 URL，')
+              print('::error::或在 workflow 的 DEFAULT_DOWNLOAD_URL 填入瀏覽器複製的下載連結。')
+              sys.exit(1)
+
+          # ── 解析座標 ────────────────────────────────────────────
+          print(f'\nTotal rows: {len(rows)}')
+          print(f'Fields: {list(rows[0].keys())}')
+          print(f'Sample: {json.dumps(rows[0], ensure_ascii=False)[:400]}')
+
+          def find_coords(row):
+              lng = lat = None
+              for k in ('經度','X座標','座標X','longitude','WGS84經度','座標-WGS84-X','lng'):
+                  v = row.get(k)
+                  if v not in (None, ''):
+                      try: lng = float(v); break
+                      except: pass
+              for k in ('緯度','Y座標','座標Y','latitude','WGS84緯度','座標-WGS84-Y','lat'):
+                  v = row.get(k)
+                  if v not in (None, ''):
+                      try: lat = float(v); break
+                      except: pass
+              if lng is None or lat is None:
+                  for v in row.values():
+                      try:
+                          f = float(v)
+                          if lng is None and 121.4 <= f <= 121.7: lng = f
+                          if lat is None and 24.9  <= f <= 25.3:  lat = f
+                      except: pass
+              return lng, lat
+
+          features = []
+          for row in rows:
+              lng, lat = find_coords(row)
+              if lng is None or lat is None: continue
+              if not (24.9 <= lat <= 25.3 and 121.4 <= lng <= 121.7): continue
+              features.append({
+                  'type': 'Feature',
+                  'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
+                  'properties': {
+                      'name':    row.get('地點', row.get('名稱', row.get('地點名稱', ''))),
+                      'address': row.get('地址', row.get('住址', row.get('位置', ''))),
+                      'type':    row.get('樣態', row.get('類型', row.get('場所類型', ''))),
+                      'hours':   row.get('開放時間', '')
+                  }
+              })
+
+          print(f'Valid features: {len(features)} / {len(rows)}')
+          if not features:
+              print('Numeric fields:')
+              for k, v in rows[0].items():
+                  try: print(f'  {k!r}: {float(v)}')
+                  except: pass
+              print('::error::No WGS84 coordinates found')
+              sys.exit(1)
+
+          geojson = {
+              'type': 'FeatureCollection',
+              'generated': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+              'features': features
+          }
+          with open(OUTPUT, 'w', encoding='utf-8') as f:
+              json.dump(geojson, f, ensure_ascii=False, separators=(',', ':'))
+          print(f'Done — {len(features)} features → {OUTPUT}')
+          PYEOF
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/smoking-zones.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update smoking-zones.json [skip ci]"
+            git push
+          fi

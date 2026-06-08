@@ -182,6 +182,21 @@
   .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
 
+  /* ── 合法吸菸區切換 ── */
+  .zone-toggle { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
+  .zone-toggle-btn {
+    width: 100%; background: rgba(39,174,96,.1); border: 1px solid rgba(39,174,96,.35);
+    border-radius: 7px; color: #27ae60; font-size: .7rem; font-weight: 600;
+    cursor: pointer; padding: 6px 8px;
+    display: flex; align-items: center; gap: 6px;
+    transition: all .15s;
+  }
+  .zone-toggle-btn:hover { background: rgba(39,174,96,.2); }
+  .zone-toggle-btn.active { background: rgba(39,174,96,.25); border-color: #2ecc71; color: #2ecc71; }
+  .zone-toggle-icon { font-size: .8rem; flex-shrink: 0; }
+  .zone-toggle-label { flex: 1; text-align: left; line-height: 1.2; }
+  .zone-toggle-count { font-size: .6rem; color: #6e7681; font-weight: 400; }
+
   /* ── 右側圖示按鈕 ── */
   .right-btns {
     position: absolute; top: 10px; right: 10px;
@@ -437,6 +452,14 @@
       </div>
     </div>
 
+    <!-- 合法吸菸區切換 -->
+    <div class="zone-toggle">
+      <button class="zone-toggle-btn" id="zone-toggle-btn" title="顯示／隱藏合法吸菸區">
+        <span class="zone-toggle-icon">🚬</span>
+        <span class="zone-toggle-label">合法吸菸區<br><span class="zone-toggle-count" id="zone-count">載入中…</span></span>
+      </button>
+    </div>
+
     <!-- 時段篩選（所有模式共用）-->
     <div class="slot-filter" id="slot-filter">
       <div class="slot-filter-title">通報時段 <span class="slot-filter-clear" id="slot-clear">全選</span></div>
@@ -463,6 +486,10 @@
 <script>
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
+var SMOKING_ZONE_API = './smoking-zones.json';
+var SHEET_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
+var GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+               '/gviz/tq?tqx=responseHandler:_gvizCallback&sheet=SmokingReports';
 var TAIPEI_CENTER = [121.5654, 25.0330];
 var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
 
@@ -479,6 +506,8 @@ var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
 var sc = null; // supercluster 實例
+var smokingZoneVisible = false;
+var smokingZoneLoaded = false;
 
 function buildSupercluster(features) {
   try {
@@ -652,6 +681,89 @@ function initLayers() {
       'circle-opacity': 0.85, 'circle-stroke-width': 0
     }
   });
+
+  // ── 合法吸菸區圖層 ──
+  // 繪製 Google Maps 風格水滴錨點（不使用 emoji，避免字型 404）
+  (function() {
+    var w = 22, h = 32, sc = 2; // sc = pixel ratio for retina
+    var canvas = document.createElement('canvas');
+    canvas.width = w * sc; canvas.height = h * sc;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(sc, sc);
+
+    var cx = w / 2, cr = w / 2 - 2, cy = cr + 2;
+
+    // 陰影
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 3; ctx.shadowOffsetY = 1.5;
+
+    // 水滴主體
+    ctx.beginPath();
+    ctx.moveTo(cx, h - 2);
+    ctx.bezierCurveTo(cx - 3, h * 0.64, cx - cr - 1, cy + cr * 0.75, cx - cr - 1, cy);
+    ctx.arc(cx, cy, cr + 1, Math.PI, 0, false);
+    ctx.bezierCurveTo(cx + cr + 1, cy + cr * 0.75, cx + 3, h * 0.64, cx, h - 2);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // 消除陰影後畫白色內圓
+    ctx.shadowColor = 'transparent';
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr * 0.42, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fill();
+
+    map.addImage('zone-pin', ctx.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio: sc });
+  })();
+
+  map.addSource('smoking-zones', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+
+  // 外光暈（hover 感）
+  map.addLayer({
+    id: 'layer-smoking-zones-halo', type: 'circle', source: 'smoking-zones',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 16],
+      'circle-color': 'rgba(231,76,60,0)',
+      'circle-stroke-color': 'rgba(231,76,60,0.2)',
+      'circle-stroke-width': 5,
+      'circle-blur': 0.6
+    }
+  });
+
+  // 水滴錨點 symbol 圖層
+  map.addLayer({
+    id: 'layer-smoking-zones', type: 'symbol', source: 'smoking-zones',
+    layout: {
+      visibility: 'none',
+      'icon-image': 'zone-pin',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 13, 0.75, 16, 1.1],
+      'icon-anchor': 'bottom',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true
+    }
+  });
+
+  map.on('click', 'layer-smoking-zones', function(e) {
+    var props = e.features[0].properties;
+    var coords = e.features[0].geometry.coordinates.slice();
+    new maplibregl.Popup({ offset: 14, maxWidth: '240px' })
+      .setLngLat(coords)
+      .setHTML(
+        '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">🚬 合法吸菸區</div>' +
+        (props.name    ? '<div class="popup-addr">🏷 ' + esc(props.name) + '</div>' : '') +
+        (props.address ? '<div class="popup-desc">📍 ' + esc(props.address) + '</div>' : '') +
+        (props.type    ? '<div class="popup-time" style="color:#6e7681;font-size:.7rem;margin-top:3px;">' + esc(props.type) + '</div>' : '') +
+        (props.hours   ? '<div class="popup-time">⏰ ' + esc(props.hours) + '</div>' : '')
+      ).addTo(map);
+  });
+
+  map.on('mouseenter', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = ''; });
 
   // ── 互動事件 ──
   map.on('click', 'layer-clusters', function(e) {
@@ -900,31 +1012,91 @@ function applyData(features) {
   document.getElementById('loading').classList.add('hidden');
 }
 
+// gviz 回應解析：將 Google Visualization table 轉為 GeoJSON features
+function gvizTableToFeatures(table) {
+  var cols = table.cols.map(function(c) { return c.label || c.id; });
+  var idx = {};
+  cols.forEach(function(name, i) { idx[name] = i; });
+
+  // 欄位對應（依 Code.gs COL 定義）
+  var iTs  = idx['timestamp']    !== undefined ? idx['timestamp']    : 1;
+  var iSl  = idx['time_slot']    !== undefined ? idx['time_slot']    : 2;
+  var iLat = idx['lat']          !== undefined ? idx['lat']          : 3;
+  var iLng = idx['lng']          !== undefined ? idx['lng']          : 4;
+  var iAdr = idx['address_input']!== undefined ? idx['address_input']: 6;
+  var iDsc = idx['description']  !== undefined ? idx['description']  : 7;
+
+  var features = [];
+  (table.rows || []).forEach(function(row) {
+    var c = row.c || [];
+    var lat = parseFloat(c[iLat] && c[iLat].v);
+    var lng = parseFloat(c[iLng] && c[iLng].v);
+    if (isNaN(lat) || isNaN(lng)) return;
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: {
+        timestamp:     c[iTs]  ? String(c[iTs].v  || '') : '',
+        time_slot:     c[iSl]  ? parseInt(c[iSl].v) || 0 : 0,
+        address_input: c[iAdr] ? String(c[iAdr].v || '') : '',
+        description:   c[iDsc] ? String(c[iDsc].v || '') : ''
+      }
+    });
+  });
+  return features;
+}
+
+var _gvizTimer = null;
+window._gvizCallback = function(resp) {
+  if (_gvizTimer) { clearTimeout(_gvizTimer); _gvizTimer = null; }
+  var tag = document.getElementById('_gviz_script');
+  if (tag) tag.parentNode.removeChild(tag);
+  try {
+    if (resp.status !== 'ok') throw new Error('gviz status: ' + resp.status);
+    var features = normalizeFeatures(gvizTableToFeatures(resp.table));
+    setDataSource('live', '即時資料 • ' + features.length + ' 筆');
+    applyData(features);
+    fitToFeatures(features);
+  } catch(e) {
+    console.warn('gviz 解析失敗，改用 mock：', e);
+    loadMockData();
+  }
+};
+
+function loadMockData() {
+  setDataSource('mock', '示範資料');
+  fetch(MOCK_URL)
+    .then(function(r) { return r.json(); })
+    .then(function(geojson) { applyData(normalizeFeatures(geojson.features || [])); })
+    .catch(function(e) {
+      setDataSource('err', '載入失敗');
+      document.getElementById('loading').classList.add('hidden');
+      console.error(e);
+    });
+}
+
 function loadData() {
   document.getElementById('loading').classList.remove('hidden');
   setDataSource('', '載入中…');
-  fetch(API_URL + '?action=getReports', { redirect: 'follow' })
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-    .then(function(text) {
-      var geojson = JSON.parse(text);
-      if (!geojson.features) throw new Error('缺少 features');
-      var features = normalizeFeatures(geojson.features);
-      setDataSource('live', '即時資料 • ' + features.length + ' 筆');
-      applyData(features);
-      fitToFeatures(features);
-    })
-    .catch(function(err) {
-      console.warn('API 載入失敗，改用 mock：', err);
-      setDataSource('mock', '示範資料');
-      fetch(MOCK_URL)
-        .then(function(r) { return r.json(); })
-        .then(function(geojson) { applyData(normalizeFeatures(geojson.features || [])); })
-        .catch(function(e) {
-          setDataSource('err', '載入失敗');
-          document.getElementById('loading').classList.add('hidden');
-          console.error(e);
-        });
-    });
+
+  var old = document.getElementById('_gviz_script');
+  if (old) old.parentNode.removeChild(old);
+
+  // 逾時 10 秒 fallback mock
+  _gvizTimer = setTimeout(function() {
+    console.warn('gviz 逾時，改用 mock');
+    loadMockData();
+  }, 10000);
+
+  var script = document.createElement('script');
+  script.id  = '_gviz_script';
+  script.src = GVIZ_URL;
+  script.onerror = function() {
+    clearTimeout(_gvizTimer); _gvizTimer = null;
+    console.warn('gviz script 載入失敗，改用 mock');
+    loadMockData();
+  };
+  document.head.appendChild(script);
 }
 
 document.getElementById('locate-btn').addEventListener('click', function() {
@@ -1108,6 +1280,52 @@ document.getElementById('report-close').addEventListener('click', function() {
   var link = document.getElementById('report-link');
   link.href = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') ? API_URL : '#';
 })();
+
+// ── 合法吸菸區 ──────────────────────────────────────────────────
+function loadSmokingZones() {
+  document.getElementById('zone-count').textContent = '載入中…';
+  fetch(SMOKING_ZONE_API, { redirect: 'follow' })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(geojson) {
+      var features = (geojson.features || []).filter(function(f) {
+        var c = f.geometry && f.geometry.coordinates;
+        return c && !isNaN(c[0]) && !isNaN(c[1]);
+      });
+      if (map.getSource('smoking-zones')) {
+        map.getSource('smoking-zones').setData({ type: 'FeatureCollection', features: features });
+      }
+      smokingZoneLoaded = true;
+      var countEl = document.getElementById('zone-count');
+      if (features.length === 0) {
+        countEl.textContent = '資料更新中…';
+      } else {
+        countEl.textContent = features.length + ' 處';
+      }
+      console.log('[smoking-zones] loaded', features.length, 'zones');
+      if (smokingZoneVisible) setSmokingZoneVisibility(true);
+    })
+    .catch(function(err) {
+      console.warn('[smoking-zones] 載入失敗', err);
+      document.getElementById('zone-count').textContent = '載入失敗';
+    });
+}
+
+function setSmokingZoneVisibility(visible) {
+  ['layer-smoking-zones-halo', 'layer-smoking-zones'].forEach(function(id) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+  });
+  var btn = document.getElementById('zone-toggle-btn');
+  btn.classList.toggle('active', visible);
+}
+
+document.getElementById('zone-toggle-btn').addEventListener('click', function() {
+  smokingZoneVisible = !smokingZoneVisible;
+  setSmokingZoneVisibility(smokingZoneVisible);
+  if (smokingZoneVisible && !smokingZoneLoaded) loadSmokingZones();
+});
+
+// 地圖載入後自動取得吸菸區資料（但預設隱藏）
+map.on('load', function() { loadSmokingZones(); });
 </script>
 </body>
 </html>

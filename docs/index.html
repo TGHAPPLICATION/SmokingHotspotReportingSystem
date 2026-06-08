@@ -680,34 +680,68 @@ function initLayers() {
   });
 
   // ── 合法吸菸區圖層 ──
+  // 繪製 Google Maps 風格水滴錨點（不使用 emoji，避免字型 404）
+  (function() {
+    var w = 22, h = 32, sc = 2; // sc = pixel ratio for retina
+    var canvas = document.createElement('canvas');
+    canvas.width = w * sc; canvas.height = h * sc;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(sc, sc);
+
+    var cx = w / 2, cr = w / 2 - 2, cy = cr + 2;
+
+    // 陰影
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 3; ctx.shadowOffsetY = 1.5;
+
+    // 水滴主體
+    ctx.beginPath();
+    ctx.moveTo(cx, h - 2);
+    ctx.bezierCurveTo(cx - 3, h * 0.64, cx - cr - 1, cy + cr * 0.75, cx - cr - 1, cy);
+    ctx.arc(cx, cy, cr + 1, Math.PI, 0, false);
+    ctx.bezierCurveTo(cx + cr + 1, cy + cr * 0.75, cx + 3, h * 0.64, cx, h - 2);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // 消除陰影後畫白色內圓
+    ctx.shadowColor = 'transparent';
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr * 0.42, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fill();
+
+    map.addImage('zone-pin', ctx.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio: sc });
+  })();
+
   map.addSource('smoking-zones', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] }
   });
 
-  // 外光暈
+  // 外光暈（hover 感）
   map.addLayer({
     id: 'layer-smoking-zones-halo', type: 'circle', source: 'smoking-zones',
     layout: { visibility: 'none' },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 16, 17, 22],
-      'circle-color': 'rgba(39,174,96,0)',
-      'circle-stroke-color': 'rgba(39,174,96,0.25)',
-      'circle-stroke-width': 6,
-      'circle-blur': 0.5
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 16],
+      'circle-color': 'rgba(231,76,60,0)',
+      'circle-stroke-color': 'rgba(231,76,60,0.2)',
+      'circle-stroke-width': 5,
+      'circle-blur': 0.6
     }
   });
 
-  // 空心綠圓
+  // 水滴錨點 symbol 圖層
   map.addLayer({
-    id: 'layer-smoking-zones', type: 'circle', source: 'smoking-zones',
-    layout: { visibility: 'none' },
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 14, 9, 17, 13],
-      'circle-color': 'rgba(39,174,96,0.12)',
-      'circle-stroke-color': '#27ae60',
-      'circle-stroke-width': 2,
-      'circle-stroke-opacity': 0.95
+    id: 'layer-smoking-zones', type: 'symbol', source: 'smoking-zones',
+    layout: {
+      visibility: 'none',
+      'icon-image': 'zone-pin',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 13, 0.75, 16, 1.1],
+      'icon-anchor': 'bottom',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true
     }
   });
 

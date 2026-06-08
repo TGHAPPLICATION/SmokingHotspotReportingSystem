@@ -27,24 +27,6 @@ function doGet(e) {
     return getReportsJson(e);
   }
 
-  if (action === 'getSmokingZones') {
-    return getSmokingZonesJson();
-  }
-
-  if (action === 'clearSmokingZonesCache') {
-    CacheService.getScriptCache().remove(SMOKING_ZONE_CACHE_KEY);
-    return buildJsonResponse({ cleared: true });
-  }
-
-  if (action === 'debugSmokingZones') {
-    var url = 'https://data.taipei/api/v1/dataset/' + SMOKING_ZONE_DATASET_ID +
-              '?scope=resourceAquire&limit=2&offset=0';
-    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    var body = JSON.parse(resp.getContentText());
-    var rows = (body.result || body).results || [];
-    return buildJsonResponse({ fields: rows.length > 0 ? Object.keys(rows[0]) : [], sample: rows[0] || null });
-  }
-
   // 回傳表單 HTML
   return HtmlService
     .createHtmlOutputFromFile('Form')
@@ -134,76 +116,6 @@ function getReportsJson(e) {
       .createTextOutput(callback + '(' + geojson + ')')
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
-  return ContentService.createTextOutput(geojson).setMimeType(ContentService.MimeType.JSON);
-}
-
-// ── 合法吸菸區（台北市開放資料代理）────────────────────────────
-var SMOKING_ZONE_DATASET_ID = '8b2fcdeb-d14b-46c4-92d8-66ad07b96a91';
-var SMOKING_ZONE_CACHE_KEY  = 'smoking_zones_geojson';
-var SMOKING_ZONE_CACHE_SECS = 21600; // 6 小時
-
-function getSmokingZonesJson() {
-  var cache = CacheService.getScriptCache();
-  var cached = cache.get(SMOKING_ZONE_CACHE_KEY);
-  if (cached) {
-    return ContentService.createTextOutput(cached).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var allRows = [];
-  var limit   = 1000;
-  var offset  = 0;
-  var total   = null;
-
-  do {
-    var url = 'https://data.taipei/api/v1/dataset/' + SMOKING_ZONE_DATASET_ID +
-              '?scope=resourceAquire&limit=' + limit + '&offset=' + offset;
-    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (resp.getResponseCode() !== 200) break;
-
-    var body   = JSON.parse(resp.getContentText());
-    var result = body.result || body;
-    var rows   = result.results || result.data || [];
-    allRows    = allRows.concat(rows);
-
-    if (total === null) total = parseInt(result.count) || 0;
-    offset += limit;
-  } while (rows.length === limit && offset < total);
-
-  var features = [];
-  allRows.forEach(function(row) {
-    // 優先用已知欄位名
-    var lng = parseFloat(row['經度'] || row['X'] || row['座標X'] || row['longitude'] || row['WGS84經度'] || row['座標-WGS84-X'] || '');
-    var lat = parseFloat(row['緯度'] || row['Y'] || row['座標Y'] || row['latitude']  || row['WGS84緯度'] || row['座標-WGS84-Y'] || '');
-
-    // 若仍找不到，掃描所有欄位，以數值範圍判斷
-    if (isNaN(lng) || isNaN(lat)) {
-      var lngCand = null, latCand = null;
-      var keys = Object.keys(row);
-      for (var k = 0; k < keys.length; k++) {
-        var v = parseFloat(row[keys[k]]);
-        if (isNaN(v)) continue;
-        if (v >= 121.4 && v <= 121.7) lngCand = v;
-        if (v >= 24.9  && v <= 25.3)  latCand  = v;
-      }
-      if (lngCand !== null && latCand !== null) { lng = lngCand; lat = latCand; }
-    }
-
-    if (isNaN(lng) || isNaN(lat)) return;
-    if (lat < 24.9 || lat > 25.3 || lng < 121.4 || lng > 121.7) return;
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: {
-        name:    row['地點']    || row['名稱']     || row['地點名稱'] || '',
-        address: row['地址']    || row['住址']     || row['位置']     || '',
-        type:    row['樣態']    || row['類型']     || row['場所類型'] || '',
-        hours:   row['開放時間'] || ''
-      }
-    });
-  });
-
-  var geojson = JSON.stringify({ type: 'FeatureCollection', features: features });
-  try { cache.put(SMOKING_ZONE_CACHE_KEY, geojson, SMOKING_ZONE_CACHE_SECS); } catch(e) {}
   return ContentService.createTextOutput(geojson).setMimeType(ContentService.MimeType.JSON);
 }
 

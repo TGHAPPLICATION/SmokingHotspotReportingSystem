@@ -182,6 +182,21 @@
   .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
 
+  /* ── 合法吸菸區切換 ── */
+  .zone-toggle { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
+  .zone-toggle-btn {
+    width: 100%; background: rgba(39,174,96,.1); border: 1px solid rgba(39,174,96,.35);
+    border-radius: 7px; color: #27ae60; font-size: .7rem; font-weight: 600;
+    cursor: pointer; padding: 6px 8px;
+    display: flex; align-items: center; gap: 6px;
+    transition: all .15s;
+  }
+  .zone-toggle-btn:hover { background: rgba(39,174,96,.2); }
+  .zone-toggle-btn.active { background: rgba(39,174,96,.25); border-color: #2ecc71; color: #2ecc71; }
+  .zone-toggle-icon { font-size: .8rem; flex-shrink: 0; }
+  .zone-toggle-label { flex: 1; text-align: left; line-height: 1.2; }
+  .zone-toggle-count { font-size: .6rem; color: #6e7681; font-weight: 400; }
+
   /* ── 右側圖示按鈕 ── */
   .right-btns {
     position: absolute; top: 10px; right: 10px;
@@ -437,6 +452,14 @@
       </div>
     </div>
 
+    <!-- 合法吸菸區切換 -->
+    <div class="zone-toggle">
+      <button class="zone-toggle-btn" id="zone-toggle-btn" title="顯示／隱藏合法吸菸區">
+        <span class="zone-toggle-icon">▲</span>
+        <span class="zone-toggle-label">合法吸菸區<br><span class="zone-toggle-count" id="zone-count">載入中…</span></span>
+      </button>
+    </div>
+
     <!-- 時段篩選（所有模式共用）-->
     <div class="slot-filter" id="slot-filter">
       <div class="slot-filter-title">通報時段 <span class="slot-filter-clear" id="slot-clear">全選</span></div>
@@ -463,6 +486,7 @@
 <script>
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
+var SMOKING_ZONE_API = 'https://data.taipei/api/v1/dataset/8b2fcdeb-d14b-46c4-92d8-66ad07b96a91?scope=resourceAquire&limit=1000&offset=0';
 var TAIPEI_CENTER = [121.5654, 25.0330];
 var SLOT_LABELS = ['00–02','02–04','04–06','06–08','08–10','10–12','12–14','14–16','16–18','18–20','20–22','22–24'];
 
@@ -479,6 +503,8 @@ var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
 var sc = null; // supercluster 實例
+var smokingZoneVisible = false;
+var smokingZoneLoaded = false;
 
 function buildSupercluster(features) {
   try {
@@ -651,6 +677,71 @@ function initLayers() {
       ],
       'circle-opacity': 0.85, 'circle-stroke-width': 0
     }
+  });
+
+  // ── 合法吸菸區圖層 ──
+  (function() {
+    var size = 20;
+    var canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.beginPath();
+    ctx.moveTo(size / 2, 1);
+    ctx.lineTo(size - 1, size - 1);
+    ctx.lineTo(1, size - 1);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(39,174,96,0.85)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    map.addImage('smoking-zone-triangle', ctx.getImageData(0, 0, size, size), { pixelRatio: 1 });
+  })();
+
+  map.addSource('smoking-zones', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] }
+  });
+
+  map.addLayer({
+    id: 'layer-smoking-zones-halo', type: 'circle', source: 'smoking-zones',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': 14,
+      'circle-color': '#27ae60',
+      'circle-opacity': 0.12,
+      'circle-stroke-width': 0
+    }
+  });
+
+  map.addLayer({
+    id: 'layer-smoking-zones', type: 'symbol', source: 'smoking-zones',
+    layout: {
+      visibility: 'none',
+      'icon-image': 'smoking-zone-triangle',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.7, 14, 1.0, 17, 1.4],
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': false
+    }
+  });
+
+  map.on('click', 'layer-smoking-zones', function(e) {
+    var props = e.features[0].properties;
+    var coords = e.features[0].geometry.coordinates.slice();
+    new maplibregl.Popup({ offset: 14, maxWidth: '240px' })
+      .setLngLat(coords)
+      .setHTML(
+        '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">▲ 合法吸菸區</div>' +
+        (props.name    ? '<div class="popup-addr">🏷 ' + esc(props.name) + '</div>' : '') +
+        (props.address ? '<div class="popup-desc">📍 ' + esc(props.address) + '</div>' : '') +
+        (props.type    ? '<div class="popup-time">類型：' + esc(props.type) + '</div>' : '')
+      ).addTo(map);
+  });
+
+  ['layer-smoking-zones'].forEach(function(id) {
+    map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
   // ── 互動事件 ──
@@ -1108,6 +1199,82 @@ document.getElementById('report-close').addEventListener('click', function() {
   var link = document.getElementById('report-link');
   link.href = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') ? API_URL : '#';
 })();
+
+// ── 合法吸菸區 ──────────────────────────────────────────────────
+function parseSmokingZoneFeatures(results) {
+  var features = [];
+  results.forEach(function(row) {
+    // 欄位名稱可能因資料集版本不同，逐一嘗試
+    var lng = parseFloat(row['經度'] || row['X'] || row['座標X'] || row['longitude'] || row['lng'] || '');
+    var lat = parseFloat(row['緯度'] || row['Y'] || row['座標Y'] || row['latitude'] || row['lat'] || '');
+    if (isNaN(lng) || isNaN(lat)) return;
+    if (lat < 24.9 || lat > 25.3 || lng < 121.4 || lng > 121.7) return; // 台北範圍
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: {
+        name:    row['名稱'] || row['地點名稱'] || row['場所名稱'] || '',
+        address: row['地址'] || row['住址'] || row['位置'] || '',
+        type:    row['類型'] || row['場所類型'] || row['吸菸區類型'] || ''
+      }
+    });
+  });
+  return features;
+}
+
+function fetchAllSmokingZones(url, accumulated, resolve, reject) {
+  fetch(url)
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) {
+      var result = data.result || data;
+      var results = result.results || result.data || [];
+      accumulated = accumulated.concat(results);
+      // 若還有下一頁就繼續取
+      var count = result.count || 0;
+      var limit = result.limit || 1000;
+      var offset = result.offset || 0;
+      if (count > 0 && offset + limit < count) {
+        var nextUrl = SMOKING_ZONE_API.replace(/offset=\d+/, 'offset=' + (offset + limit));
+        fetchAllSmokingZones(nextUrl, accumulated, resolve, reject);
+      } else {
+        resolve(accumulated);
+      }
+    })
+    .catch(reject);
+}
+
+function loadSmokingZones() {
+  document.getElementById('zone-count').textContent = '載入中…';
+  fetchAllSmokingZones(SMOKING_ZONE_API, [], function(rows) {
+    var features = parseSmokingZoneFeatures(rows);
+    var fc = { type: 'FeatureCollection', features: features };
+    if (map.getSource('smoking-zones')) map.getSource('smoking-zones').setData(fc);
+    smokingZoneLoaded = true;
+    document.getElementById('zone-count').textContent = features.length + ' 處';
+    console.log('[smoking-zones] loaded', features.length, 'zones');
+    if (smokingZoneVisible) setSmokingZoneVisibility(true);
+  }, function(err) {
+    console.warn('[smoking-zones] 載入失敗', err);
+    document.getElementById('zone-count').textContent = '載入失敗';
+  });
+}
+
+function setSmokingZoneVisibility(visible) {
+  ['layer-smoking-zones-halo', 'layer-smoking-zones'].forEach(function(id) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+  });
+  var btn = document.getElementById('zone-toggle-btn');
+  btn.classList.toggle('active', visible);
+}
+
+document.getElementById('zone-toggle-btn').addEventListener('click', function() {
+  smokingZoneVisible = !smokingZoneVisible;
+  setSmokingZoneVisibility(smokingZoneVisible);
+  if (smokingZoneVisible && !smokingZoneLoaded) loadSmokingZones();
+});
+
+// 地圖載入後自動取得吸菸區資料（但預設隱藏）
+map.on('load', function() { loadSmokingZones(); });
 </script>
 </body>
 </html>

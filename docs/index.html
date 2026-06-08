@@ -1064,8 +1064,6 @@ function loadData() {
   document.head.appendChild(script);
 }
 
-}
-
 document.getElementById('locate-btn').addEventListener('click', function() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(function(pos) {

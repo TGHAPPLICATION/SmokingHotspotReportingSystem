@@ -711,20 +711,6 @@ function initLayers() {
     }
   });
 
-  // 香菸 emoji 文字
-  map.addLayer({
-    id: 'layer-smoking-zones-label', type: 'symbol', source: 'smoking-zones',
-    layout: {
-      visibility: 'none',
-      'text-field': '🚬',
-      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 8, 14, 12, 17, 16],
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
-      'text-anchor': 'center'
-    },
-    paint: { 'text-opacity': 0.9 }
-  });
-
   map.on('click', 'layer-smoking-zones', function(e) {
     var props = e.features[0].properties;
     var coords = e.features[0].geometry.coordinates.slice();
@@ -739,10 +725,8 @@ function initLayers() {
       ).addTo(map);
   });
 
-  ['layer-smoking-zones', 'layer-smoking-zones-label'].forEach(function(id) {
-    map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
-  });
+  map.on('mouseenter', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = ''; });
 
   // ── 互動事件 ──
   map.on('click', 'layer-clusters', function(e) {
@@ -1230,7 +1214,7 @@ function loadSmokingZones() {
 }
 
 function setSmokingZoneVisibility(visible) {
-  ['layer-smoking-zones-halo', 'layer-smoking-zones', 'layer-smoking-zones-label'].forEach(function(id) {
+  ['layer-smoking-zones-halo', 'layer-smoking-zones'].forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
   });
   var btn = document.getElementById('zone-toggle-btn');

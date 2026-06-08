@@ -735,7 +735,8 @@ function initLayers() {
         '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">▲ 合法吸菸區</div>' +
         (props.name    ? '<div class="popup-addr">🏷 ' + esc(props.name) + '</div>' : '') +
         (props.address ? '<div class="popup-desc">📍 ' + esc(props.address) + '</div>' : '') +
-        (props.type    ? '<div class="popup-time">類型：' + esc(props.type) + '</div>' : '')
+        (props.type    ? '<div class="popup-time" style="color:#6e7681;font-size:.7rem;margin-top:3px;">🏷 ' + esc(props.type) + '</div>' : '') +
+        (props.hours   ? '<div class="popup-time">⏰ ' + esc(props.hours) + '</div>' : '')
       ).addTo(map);
   });
 

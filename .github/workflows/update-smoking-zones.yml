@@ -176,9 +176,10 @@ jobs:
                   'type': 'Feature',
                   'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
                   'properties': {
-                      'name':    row.get('名稱', row.get('地點名稱', row.get('場所名稱', ''))),
+                      'name':    row.get('地點', row.get('名稱', row.get('地點名稱', ''))),
                       'address': row.get('地址', row.get('住址', row.get('位置', ''))),
-                      'type':    row.get('類型', row.get('場所類型', row.get('吸菸區類型', '')))
+                      'type':    row.get('樣態', row.get('類型', row.get('場所類型', ''))),
+                      'hours':   row.get('開放時間', '')
                   }
               })
 

@@ -188,9 +188,10 @@ function getSmokingZonesJson() {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [lng, lat] },
       properties: {
-        name:    row['名稱']    || row['地點名稱'] || row['場所名稱'] || '',
+        name:    row['地點']    || row['名稱']     || row['地點名稱'] || '',
         address: row['地址']    || row['住址']     || row['位置']     || '',
-        type:    row['類型']    || row['場所類型'] || row['吸菸區類型'] || ''
+        type:    row['樣態']    || row['類型']     || row['場所類型'] || '',
+        hours:   row['開放時間'] || ''
       }
     });
   });

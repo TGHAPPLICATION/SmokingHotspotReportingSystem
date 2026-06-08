@@ -12,8 +12,8 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # 若 API 封鎖，在此填入從瀏覽器複製的 CSV/JSON 直接下載連結
-  DEFAULT_DOWNLOAD_URL: ''
+  # 合法吸菸區直接下載連結（resource ID: acaa0f43-3b92-4241-b5eb-3f7fdd76b74f）
+  DEFAULT_DOWNLOAD_URL: 'https://data.taipei/api/frontstage/tpeod/dataset/resource.download?rid=acaa0f43-3b92-4241-b5eb-3f7fdd76b74f'
 
 jobs:
   fetch-and-commit:

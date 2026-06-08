@@ -21,64 +21,124 @@ jobs:
       - name: Fetch and convert smoking zones
         run: |
           python3 << 'PYEOF'
-          import json, sys, urllib.request, datetime
+          import json, sys, urllib.request, urllib.parse, datetime, csv, io
 
           DATASET_ID = '8b2fcdeb-d14b-46c4-92d8-66ad07b96a91'
           OUTPUT     = 'docs/smoking-zones.json'
           HEADERS    = {
               'User-Agent': 'Mozilla/5.0 (compatible; GitHub-Actions)',
-              'Accept':     'application/json',
+              'Accept':     'application/json, text/plain, */*',
           }
 
-          def fetch(url):
+          def fetch_json(url):
               req = urllib.request.Request(url, headers=HEADERS)
               with urllib.request.urlopen(req, timeout=30) as r:
                   return json.loads(r.read().decode('utf-8'))
 
-          # ── Step 1：取得 dataset metadata ──────────────────────
-          print('=== Step 1: dataset metadata')
-          meta_url = f'https://data.taipei/api/v1/dataset/{DATASET_ID}'
-          meta = fetch(meta_url)
-          print(json.dumps(meta, ensure_ascii=False)[:2000])
+          def fetch_bytes(url):
+              req = urllib.request.Request(url, headers=HEADERS)
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return r.read()
 
-          result    = meta.get('result', meta) if isinstance(meta, dict) else {}
-          resources = result.get('resources', []) if isinstance(result, dict) else []
-          print(f'Resources found: {len(resources)}')
+          # ── Step 1：CKAN package_show 取 resource 清單 ─────────
+          print('=== Step 1: CKAN package_show')
+          ckan_url = f'https://data.taipei/api/3/action/package_show?id={DATASET_ID}'
+          try:
+              ckan = fetch_json(ckan_url)
+              print(json.dumps(ckan, ensure_ascii=False)[:3000])
+          except Exception as e:
+              print(f'CKAN failed: {e}')
+              ckan = {}
 
-          # ── Step 2：對每個 resource 嘗試抓資料 ─────────────────
-          all_rows = []
+          resources = []
+          if ckan.get('success'):
+              resources = ckan.get('result', {}).get('resources', [])
+          print(f'Resources from CKAN: {len(resources)}')
           for r in resources:
-              rid  = r.get('id') or r.get('rid', '')
-              fmt  = r.get('format', r.get('name', '?'))
-              print(f'  Trying resource id={rid} format={fmt}')
-              if not rid:
-                  continue
-              url = f'https://data.taipei/api/v1/dataset/{rid}?scope=resourceAquire&limit=1000&offset=0'
+              print(f'  id={r.get("id")} format={r.get("format")} url={r.get("url","")[:80]}')
+
+          # ── Step 2：若 CKAN 取不到，試 v1 API ─────────────────
+          if not resources:
+              print('=== Step 2: fallback to v1 API dataset list')
               try:
-                  body = fetch(url)
+                  v1 = fetch_json(f'https://data.taipei/api/v1/dataset/{DATASET_ID}')
+                  print(json.dumps(v1, ensure_ascii=False)[:2000])
+                  res = v1.get('result', v1) if isinstance(v1, dict) else {}
+                  resources = res.get('resources', [])
               except Exception as e:
-                  print(f'    ERROR: {e}'); continue
+                  print(f'v1 API failed: {e}')
 
-              if isinstance(body, list):
-                  rows = body
-              elif isinstance(body, dict):
-                  res  = body.get('result', body)
-                  rows = res.get('results', res.get('data', [])) if isinstance(res, dict) else (res if isinstance(res, list) else [])
-              else:
-                  rows = []
+          if not resources:
+              print('::error::Cannot find any resources — dataset may have moved')
+              sys.exit(1)
 
-              print(f'    rows: {len(rows)}')
+          # ── Step 3：下載資料（優先 JSON，其次 CSV）──────────────
+          all_rows = []
+
+          def rows_from_resource(r):
+              url = r.get('url', '')
+              fmt = (r.get('format') or '').upper()
+              rid = r.get('id', '')
+              print(f'  Downloading: {url[:80]} fmt={fmt}')
+
+              # 先試 v1 scope=resourceAquire
+              if rid:
+                  scope_url = f'https://data.taipei/api/v1/dataset/{rid}?scope=resourceAquire&limit=1000'
+                  try:
+                      body = fetch_json(scope_url)
+                      rows = body if isinstance(body, list) else \
+                             body.get('result', {}).get('results', []) if isinstance(body, dict) else []
+                      if rows:
+                          print(f'    scope=resourceAquire got {len(rows)} rows')
+                          return rows
+                  except Exception as e:
+                      print(f'    scope=resourceAquire failed: {e}')
+
+              # 直接下載 URL
+              if not url:
+                  return []
+              try:
+                  raw = fetch_bytes(url)
+              except Exception as e:
+                  print(f'    download failed: {e}')
+                  return []
+
+              # 嘗試 JSON 解析
+              try:
+                  body = json.loads(raw.decode('utf-8'))
+                  rows = body if isinstance(body, list) else \
+                         body.get('result', {}).get('results', body.get('data', [])) if isinstance(body, dict) else []
+                  if rows:
+                      print(f'    JSON: {len(rows)} rows')
+                      return rows
+              except Exception:
+                  pass
+
+              # 嘗試 CSV 解析
+              try:
+                  text = raw.decode('utf-8-sig')
+                  reader = csv.DictReader(io.StringIO(text))
+                  rows = list(reader)
+                  print(f'    CSV: {len(rows)} rows')
+                  return rows
+              except Exception as e:
+                  print(f'    CSV parse failed: {e}')
+
+              return []
+
+          for r in resources:
+              rows = rows_from_resource(r)
               if rows:
-                  print(f'    fields: {list(rows[0].keys())}')
-                  print(f'    sample: {json.dumps(rows[0], ensure_ascii=False)[:400]}')
+                  print(f'  Fields: {list(rows[0].keys())}')
+                  print(f'  Sample: {json.dumps(rows[0], ensure_ascii=False)[:400]}')
                   all_rows.extend(rows)
 
           print(f'Total rows: {len(all_rows)}')
           if not all_rows:
-              print('::error::No rows from any resource — check metadata above')
+              print('::error::No data rows from any resource')
               sys.exit(1)
 
-          # ── Step 3：解析座標 ────────────────────────────────────
+          # ── Step 4：解析座標 ────────────────────────────────────
           def find_coords(row):
               lng = lat = None
               for k in ('經度','X座標','座標X','longitude','WGS84經度','座標-WGS84-X','lng'):
@@ -91,7 +151,6 @@ jobs:
                   if v not in (None, ''):
                       try: lat = float(v); break
                       except: pass
-              # 若仍找不到，掃描所有欄位以數值範圍判斷
               if lng is None or lat is None:
                   for v in row.values():
                       try:
@@ -102,13 +161,10 @@ jobs:
               return lng, lat
 
           features = []
-          skipped  = 0
           for row in all_rows:
               lng, lat = find_coords(row)
-              if lng is None or lat is None:
-                  skipped += 1; continue
-              if not (24.9 <= lat <= 25.3 and 121.4 <= lng <= 121.7):
-                  skipped += 1; continue
+              if lng is None or lat is None: continue
+              if not (24.9 <= lat <= 25.3 and 121.4 <= lng <= 121.7): continue
               features.append({
                   'type': 'Feature',
                   'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
@@ -119,13 +175,13 @@ jobs:
                   }
               })
 
-          print(f'Valid features: {len(features)}, skipped: {skipped}')
+          print(f'Valid features: {len(features)} / {len(all_rows)} rows')
           if not features:
-              print('=== Numeric fields in first row:')
+              print('Numeric fields in first row:')
               for k, v in all_rows[0].items():
                   try: print(f'  {k!r}: {float(v)}')
                   except: pass
-              print('::error::No valid coordinates — check field names above')
+              print('::error::No valid WGS84 coordinates found')
               sys.exit(1)
 
           geojson = {
@@ -135,7 +191,7 @@ jobs:
           }
           with open(OUTPUT, 'w', encoding='utf-8') as f:
               json.dump(geojson, f, ensure_ascii=False, separators=(',', ':'))
-          print(f'Written {len(features)} features to {OUTPUT}')
+          print(f'Done — written {len(features)} features to {OUTPUT}')
           PYEOF
 
       - name: Commit and push if changed

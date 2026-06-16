@@ -27,18 +27,6 @@ function doGet(e) {
     return getReportsJson(e);
   }
 
-  if (action === 'listSheets') {
-    var callback = e && e.parameter && e.parameter.callback;
-    var ss = SpreadsheetApp.openById(SHEET_ID);
-    var sheets = ss.getSheets().map(function(s) { return s.getName(); });
-    var json = JSON.stringify({ sheets: sheets });
-    if (callback) {
-      return ContentService.createTextOutput(callback + '(' + json + ')')
-        .setMimeType(ContentService.MimeType.JAVASCRIPT);
-    }
-    return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
-  }
-
   // 回傳表單 HTML
   return HtmlService
     .createHtmlOutputFromFile('Form')

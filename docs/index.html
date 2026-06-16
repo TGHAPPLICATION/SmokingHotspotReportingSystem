@@ -497,8 +497,12 @@ var SHEET_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
 var GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
                '/gviz/tq?tqx=responseHandler:_gvizCallback&sheet=SmokingReports';
 
-// ── 靜態備援：若 Apps Script listSheets 無法取得分頁清單，
-//    請手動填入 Google Sheets 中除 SmokingReports 以外的分頁名稱
+// ── Google Sheets API v4 金鑰（用於自動列出分頁）
+//    在 Google Cloud Console 建立 API key 後填入（限制為 Sheets API 即可）
+//    留空則不自動列出分頁；可用 EXTRA_SHEETS 手動指定
+var SHEETS_API_KEY = '';
+
+// ── 靜態備援：不填 API key 時手動指定額外分頁名稱
 //    例如：var EXTRA_SHEETS = ['稽查紀錄', '投訴案件'];
 var EXTRA_SHEETS = [];
 var TAIPEI_CENTER = [121.5654, 25.0330];
@@ -1473,49 +1477,26 @@ function applySheetNames(names) {
   });
 }
 
-// 呼叫 Apps Script listSheets 取得所有分頁名稱；失敗則使用 EXTRA_SHEETS
+// 取得所有分頁名稱：優先用 Sheets API v4，備援用 EXTRA_SHEETS
 function loadSheetList() {
-  // 先套用靜態備援（立即生效）
-  if (EXTRA_SHEETS && EXTRA_SHEETS.length > 0) {
-    applySheetNames(EXTRA_SHEETS);
-  }
+  if (EXTRA_SHEETS && EXTRA_SHEETS.length > 0) applySheetNames(EXTRA_SHEETS);
 
-  if (!API_URL || API_URL.indexOf('YOUR_') >= 0) return;
+  if (!SHEETS_API_KEY) return;
 
-  var cbName = '_listSheetsCb';
-  var done = false;
-
-  window[cbName] = function(data) {
-    done = true;
-    var tag = document.getElementById('_list_sheets_script');
-    if (tag) tag.parentNode.removeChild(tag);
-    delete window[cbName];
-    var names = (data && Array.isArray(data.sheets)) ? data.sheets : [];
-    console.log('[listSheets] 取得分頁：', names);
-    applySheetNames(names);
-  };
-
-  var script = document.createElement('script');
-  script.id  = '_list_sheets_script';
-  script.src = API_URL + '?action=listSheets&callback=' + cbName;
-  script.onerror = function() {
-    done = true;
-    if (script.parentNode) script.parentNode.removeChild(script);
-    delete window[cbName];
-    console.warn('[listSheets] Apps Script 載入失敗 — 請確認已重新部署，或手動填入 EXTRA_SHEETS');
-  };
-
-  setTimeout(function() {
-    if (!done && window[cbName]) {
-      done = true;
-      var tag = document.getElementById('_list_sheets_script');
-      if (tag) tag.parentNode.removeChild(tag);
-      delete window[cbName];
-      console.warn('[listSheets] 逾時 — 請確認 Apps Script 已部署 listSheets action，或手動填入 EXTRA_SHEETS');
-    }
-  }, 8000);
-
-  document.head.appendChild(script);
+  fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
+        '?key=' + SHEETS_API_KEY + '&fields=sheets.properties.title')
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      var names = (data.sheets || []).map(function(s) { return s.properties && s.properties.title; }).filter(Boolean);
+      console.log('[listSheets] 取得分頁：', names);
+      applySheetNames(names);
+    })
+    .catch(function(e) {
+      console.warn('[listSheets] Sheets API 失敗 — 請確認 API key 有效並開啟 Sheets API：', e.message);
+    });
 }
 
 // 地圖載入後初始化

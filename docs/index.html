@@ -182,20 +182,28 @@
   .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
 
-  /* ── 合法吸菸區切換 ── */
-  .zone-toggle { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
-  .zone-toggle-btn {
-    width: 100%; background: rgba(39,174,96,.1); border: 1px solid rgba(39,174,96,.35);
-    border-radius: 7px; color: #27ae60; font-size: .7rem; font-weight: 600;
-    cursor: pointer; padding: 6px 8px;
-    display: flex; align-items: center; gap: 6px;
-    transition: all .15s;
+  /* ── Header 圖層面板 ── */
+  .header-layers {
+    display: flex; align-items: center; gap: 5px;
+    flex: 1; padding: 0 10px; overflow-x: auto; min-width: 0;
+    scrollbar-width: none;
   }
-  .zone-toggle-btn:hover { background: rgba(39,174,96,.2); }
-  .zone-toggle-btn.active { background: rgba(39,174,96,.25); border-color: #2ecc71; color: #2ecc71; }
-  .zone-toggle-icon { font-size: .8rem; flex-shrink: 0; }
-  .zone-toggle-label { flex: 1; text-align: left; line-height: 1.2; }
-  .zone-toggle-count { font-size: .6rem; color: #6e7681; font-weight: 400; }
+  .header-layers::-webkit-scrollbar { display: none; }
+  .layer-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(255,255,255,.05); border: 1px solid #30363d;
+    border-radius: 7px; color: #6e7681; font-size: .72rem; font-weight: 600;
+    cursor: pointer; padding: 4px 10px; white-space: nowrap;
+    transition: all .15s; flex-shrink: 0;
+  }
+  .layer-btn:hover { background: rgba(255,255,255,.1); color: #e6edf3; border-color: #484f58; }
+  .layer-btn.active {
+    color: #fff; border-color: var(--lc, #2ecc71);
+    background: rgba(255,255,255,.08);
+    box-shadow: inset 0 0 0 1px var(--lc, #2ecc71);
+  }
+  .layer-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lc, #2ecc71); flex-shrink: 0; }
+  .layer-count { font-size: .62rem; color: #484f58; font-weight: 400; margin-left: 1px; }
 
   /* ── 右側圖示按鈕 ── */
   .right-btns {
@@ -305,7 +313,13 @@
     <h1>台北市吸菸熱點地圖</h1>
     <span class="header-sub">即時通報</span>
   </div>
-  <div style="display:flex;gap:8px;align-items:center;">
+  <!-- 圖層切換列（合法吸菸區 + 動態分頁） -->
+  <div class="header-layers" id="header-layers">
+    <button class="layer-btn" id="zone-toggle-btn" style="--lc:#27ae60" title="顯示／隱藏合法吸菸區">
+      <span class="layer-dot"></span>合法吸菸區<span class="layer-count" id="zone-count"></span>
+    </button>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
     <button class="analytics-btn" id="analytics-btn">📊 成效報表</button>
     <a class="report-btn" id="report-link" href="#" target="_blank">📍 通報</a>
   </div>
@@ -450,14 +464,6 @@
         <button class="month-all-btn active" id="month-all">全部時間</button>
         <button class="month-nav-btn" id="month-next">▶</button>
       </div>
-    </div>
-
-    <!-- 合法吸菸區切換 -->
-    <div class="zone-toggle">
-      <button class="zone-toggle-btn" id="zone-toggle-btn" title="顯示／隱藏合法吸菸區">
-        <span class="zone-toggle-icon">🚬</span>
-        <span class="zone-toggle-label">合法吸菸區<br><span class="zone-toggle-count" id="zone-count">載入中…</span></span>
-      </button>
     </div>
 
     <!-- 時段篩選（所有模式共用）-->
@@ -1283,7 +1289,7 @@ document.getElementById('report-close').addEventListener('click', function() {
 
 // ── 合法吸菸區 ──────────────────────────────────────────────────
 function loadSmokingZones() {
-  document.getElementById('zone-count').textContent = '載入中…';
+  document.getElementById('zone-count').textContent = '';
   fetch(SMOKING_ZONE_API, { redirect: 'follow' })
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(geojson) {
@@ -1295,18 +1301,11 @@ function loadSmokingZones() {
         map.getSource('smoking-zones').setData({ type: 'FeatureCollection', features: features });
       }
       smokingZoneLoaded = true;
-      var countEl = document.getElementById('zone-count');
-      if (features.length === 0) {
-        countEl.textContent = '資料更新中…';
-      } else {
-        countEl.textContent = features.length + ' 處';
-      }
-      console.log('[smoking-zones] loaded', features.length, 'zones');
+      document.getElementById('zone-count').textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
       if (smokingZoneVisible) setSmokingZoneVisibility(true);
     })
     .catch(function(err) {
       console.warn('[smoking-zones] 載入失敗', err);
-      document.getElementById('zone-count').textContent = '載入失敗';
     });
 }
 
@@ -1314,8 +1313,7 @@ function setSmokingZoneVisibility(visible) {
   ['layer-smoking-zones-halo', 'layer-smoking-zones'].forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
   });
-  var btn = document.getElementById('zone-toggle-btn');
-  btn.classList.toggle('active', visible);
+  document.getElementById('zone-toggle-btn').classList.toggle('active', visible);
 }
 
 document.getElementById('zone-toggle-btn').addEventListener('click', function() {
@@ -1324,8 +1322,179 @@ document.getElementById('zone-toggle-btn').addEventListener('click', function() 
   if (smokingZoneVisible && !smokingZoneLoaded) loadSmokingZones();
 });
 
-// 地圖載入後自動取得吸菸區資料（但預設隱藏）
-map.on('load', function() { loadSmokingZones(); });
+// ── 動態分頁圖層管理器 ──────────────────────────────────────────
+var LAYER_PALETTE = ['#8b5cf6','#f59e0b','#3b82f6','#ec4899','#06b6d4','#ef4444','#14b8a6'];
+var sheetLayers = [];
+
+function layerSafeName(str) {
+  return 'sl_' + str.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+// 從 gviz table 擷取座標，支援多種欄位名稱與自動偵測
+function gvizToPoints(table) {
+  var cols = (table.cols || []).map(function(c) { return (c.label || c.id || '').toLowerCase(); });
+  var latIdx = -1, lngIdx = -1;
+  var LAT_KEYS = ['lat','latitude','緯度','y座標','座標y','wgs84緯度','座標-wgs84-y'];
+  var LNG_KEYS = ['lng','longitude','經度','x座標','座標x','wgs84經度','座標-wgs84-x'];
+  cols.forEach(function(c, i) {
+    if (latIdx < 0 && LAT_KEYS.indexOf(c) >= 0) latIdx = i;
+    if (lngIdx < 0 && LNG_KEYS.indexOf(c) >= 0) lngIdx = i;
+  });
+
+  var features = [];
+  (table.rows || []).forEach(function(row) {
+    var c = row.c || [];
+    var lat, lng;
+    if (latIdx >= 0 && lngIdx >= 0) {
+      lat = parseFloat(c[latIdx] && c[latIdx].v);
+      lng = parseFloat(c[lngIdx] && c[lngIdx].v);
+    } else {
+      // 自動掃描台北座標範圍
+      c.forEach(function(cell) {
+        if (!cell || cell.v === null) return;
+        var v = parseFloat(cell.v);
+        if (isNaN(v)) return;
+        if (lat === undefined && v >= 24.9 && v <= 25.3) lat = v;
+        if (lng === undefined && v >= 121.4 && v <= 121.7) lng = v;
+      });
+    }
+    if (isNaN(lat) || isNaN(lng)) return;
+    var props = {};
+    (table.cols || []).forEach(function(col, i) { props[col.label || col.id] = c[i] ? c[i].v : null; });
+    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: props });
+  });
+  return features;
+}
+
+function addSheetLayer(layer) {
+  if (!map.getSource(layer.sourceId)) {
+    map.addSource(layer.sourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  }
+  if (!map.getLayer(layer.layerId)) {
+    map.addLayer({
+      id: layer.layerId, type: 'circle', source: layer.sourceId,
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 8, 18, 14],
+        'circle-color': layer.color, 'circle-opacity': 0.88,
+        'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.75
+      }
+    });
+    map.on('click', layer.layerId, function(e) {
+      var props = e.features[0].properties;
+      var coords = e.features[0].geometry.coordinates.slice();
+      var html = '<div style="color:' + layer.color + ';font-size:.72rem;font-weight:700;margin-bottom:5px;">' + esc(layer.name) + '</div>';
+      Object.keys(props).forEach(function(k) {
+        var v = props[k];
+        if (v !== null && v !== '' && k !== 'lat' && k !== 'lng' && k !== 'latitude' && k !== 'longitude') {
+          html += '<div class="popup-desc"><span style="color:#6e7681;">' + esc(k) + '：</span>' + esc(String(v)) + '</div>';
+        }
+      });
+      new maplibregl.Popup({ offset: 10, maxWidth: '240px' }).setLngLat(coords).setHTML(html).addTo(map);
+    });
+    map.on('mouseenter', layer.layerId, function() { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', layer.layerId, function() { map.getCanvas().style.cursor = ''; });
+  }
+}
+
+function loadSheetLayerData(layer) {
+  var cbName = '_gvizCb_' + layer.safeName;
+  window[cbName] = function(resp) {
+    var tag = document.getElementById('_gviz_' + layer.safeName);
+    if (tag) tag.parentNode.removeChild(tag);
+    delete window[cbName];
+    try {
+      if (resp.status !== 'ok') throw new Error(resp.status);
+      var features = gvizToPoints(resp.table);
+      if (map.getSource(layer.sourceId)) {
+        map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: features });
+      }
+      layer.loaded = true;
+      var countEl = document.getElementById('layer-count-' + layer.safeName);
+      if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
+      if (layer.visible) map.setLayoutProperty(layer.layerId, 'visibility', 'visible');
+    } catch(e) {
+      console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);
+    }
+  };
+  var script = document.createElement('script');
+  script.id  = '_gviz_' + layer.safeName;
+  script.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+               '/gviz/tq?tqx=responseHandler:' + cbName + '&sheet=' + encodeURIComponent(layer.name);
+  script.onerror = function() {
+    if (script.parentNode) script.parentNode.removeChild(script);
+    delete window[cbName];
+    console.warn('[sheet-layer] ' + layer.name + ' script 載入失敗');
+  };
+  document.head.appendChild(script);
+}
+
+function createSheetLayerButton(layer) {
+  var btn = document.createElement('button');
+  btn.className = 'layer-btn';
+  btn.style.setProperty('--lc', layer.color);
+  btn.innerHTML = '<span class="layer-dot"></span>' + esc(layer.name) +
+                  '<span class="layer-count" id="layer-count-' + layer.safeName + '"></span>';
+  btn.addEventListener('click', function() {
+    layer.visible = !layer.visible;
+    btn.classList.toggle('active', layer.visible);
+    if (layer.visible && !layer.loaded) {
+      loadSheetLayerData(layer);
+    } else if (map.getLayer(layer.layerId)) {
+      map.setLayoutProperty(layer.layerId, 'visibility', layer.visible ? 'visible' : 'none');
+    }
+  });
+  document.getElementById('header-layers').appendChild(btn);
+}
+
+// 呼叫 Apps Script listSheets 取得所有分頁名稱
+function loadSheetList() {
+  if (!API_URL || API_URL.indexOf('YOUR_') >= 0) return;
+  var cbName = '_listSheetsCb';
+  window[cbName] = function(data) {
+    var tag = document.getElementById('_list_sheets_script');
+    if (tag) tag.parentNode.removeChild(tag);
+    delete window[cbName];
+    var names = (data && Array.isArray(data.sheets)) ? data.sheets : [];
+    names.forEach(function(name) {
+      if (name === 'SmokingReports') return; // 主要資料已由 gviz 主流程載入
+      var color = LAYER_PALETTE[sheetLayers.length % LAYER_PALETTE.length];
+      var sn = layerSafeName(name);
+      var layer = {
+        name: name, safeName: sn, color: color,
+        sourceId: 'source-' + sn, layerId: 'layer-' + sn,
+        visible: false, loaded: false
+      };
+      sheetLayers.push(layer);
+      // 地圖已載入，直接加 source/layer；否則等待 map.on('load')
+      if (map.isStyleLoaded()) addSheetLayer(layer);
+      createSheetLayerButton(layer);
+    });
+  };
+  var script = document.createElement('script');
+  script.id  = '_list_sheets_script';
+  script.src = API_URL + '?action=listSheets&callback=' + cbName;
+  script.onerror = function() {
+    if (script.parentNode) script.parentNode.removeChild(script);
+    delete window[cbName];
+    console.warn('[listSheets] Apps Script 未回應');
+  };
+  setTimeout(function() {
+    if (window[cbName]) { // 逾時 8 秒 fallback
+      if (script.parentNode) script.parentNode.removeChild(script);
+      delete window[cbName];
+    }
+  }, 8000);
+  document.head.appendChild(script);
+}
+
+// 地圖載入後初始化
+map.on('load', function() {
+  loadSmokingZones();
+  // 在圖層初始化後將已知的 sheetLayers 加入地圖（通常為空，等 loadSheetList 回應後才有）
+  sheetLayers.forEach(function(l) { addSheetLayer(l); });
+  loadSheetList();
+});
 </script>
 </body>
 </html>

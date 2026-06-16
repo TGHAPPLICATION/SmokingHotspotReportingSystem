@@ -20,23 +20,6 @@ var SHEET_COL = {
 
 var TAIPEI_PREFIX = '臺北市';
 
-// ── 選單注冊 ──────────────────────────────────────────────────────
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('ETL 工具')
-    .addItem('上傳 Excel → 轉換地址座標', 'showUploadDialog')
-    .addToUi();
-}
-
-// ── 對話框 ────────────────────────────────────────────────────────
-function showUploadDialog() {
-  var html = HtmlService.createHtmlOutputFromFile('EtlUploadDialog')
-    .setWidth(480)
-    .setHeight(260)
-    .setTitle('上傳 Excel 並轉換地址座標');
-  SpreadsheetApp.getUi().showModalDialog(html, '上傳 Excel 並轉換地址座標');
-}
-
 // ── 主流程（由前端呼叫）─────────────────────────────────────────
 /**
  * 接收前端傳來的 base64 Excel 內容，執行完整 ETL 流程。

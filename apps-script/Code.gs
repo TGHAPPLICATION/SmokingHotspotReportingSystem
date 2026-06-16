@@ -27,6 +27,14 @@ function doGet(e) {
     return getReportsJson(e);
   }
 
+  // ETL 管理頁
+  if (e && e.parameter && e.parameter.page === 'etl') {
+    return HtmlService
+      .createHtmlOutputFromFile('EtlUploadDialog')
+      .setTitle('ETL 地址座標轉換')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   // 回傳表單 HTML
   return HtmlService
     .createHtmlOutputFromFile('Form')

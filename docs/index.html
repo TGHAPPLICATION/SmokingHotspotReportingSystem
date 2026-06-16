@@ -824,12 +824,13 @@ function esc(s) {
 var LAYER_VIS = {
   cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
   heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
-  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' }
+  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' },
+  hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
 };
 
 function setViewMode(mode) {
   viewMode = mode;
-  var vis = LAYER_VIS[mode];
+  var vis = LAYER_VIS[mode] || LAYER_VIS.hidden;
   Object.keys(vis).forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
   });
@@ -841,9 +842,18 @@ function setViewMode(mode) {
   if (mode === 'cluster') updateClusters();
 }
 
-document.getElementById('btn-cluster').addEventListener('click', function() { setViewMode('cluster'); });
-document.getElementById('btn-heatmap').addEventListener('click', function() { setViewMode('heatmap'); });
-document.getElementById('btn-points').addEventListener('click',  function() { setViewMode('points'); });
+function handleViewBtn(mode) {
+  // 再次點擊已選取的按鈕 → 隱藏所有回報點位
+  if (viewMode === mode) {
+    setViewMode('hidden');
+  } else {
+    setViewMode(mode);
+  }
+}
+
+document.getElementById('btn-cluster').addEventListener('click', function() { handleViewBtn('cluster'); });
+document.getElementById('btn-heatmap').addEventListener('click', function() { handleViewBtn('heatmap'); });
+document.getElementById('btn-points').addEventListener('click',  function() { handleViewBtn('points'); });
 
 // 時段 band 篩選
 document.querySelectorAll('.slot-band').forEach(function(el) {

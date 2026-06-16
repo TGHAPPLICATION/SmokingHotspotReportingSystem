@@ -881,7 +881,9 @@ function normalizeFeatures(features) {
     var c = f.geometry && f.geometry.coordinates;
     return c && !isNaN(parseFloat(c[0])) && !isNaN(parseFloat(c[1]));
   }).map(function(f) {
-    f.properties.time_slot = parseInt(f.properties.time_slot) || 0;
+    // 確保 time_slot 一定是整數，MapLibre 表達式不接受 null
+    var ts = parseInt(f.properties.time_slot);
+    f.properties.time_slot = isNaN(ts) ? 0 : ts;
     return f;
   });
 }

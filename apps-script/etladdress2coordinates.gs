@@ -1,6 +1,10 @@
 // ══════════════════════════════════════════════════════════════════
 //  etladdress2coordinates.gs
 //  上傳 Excel → 補齊地址 → 地理編碼 → 寫入目標試算表
+//
+//  採兩階段設計避免 Apps Script 6 分鐘執行上限：
+//    階段一 processExcelUpload()  — 匯入、補齊地址、轉換時間（快速）
+//    階段二 geocodeNextBatch()    — 分批地理編碼，前端輪詢直到完成
 // ══════════════════════════════════════════════════════════════════
 
 // ── 常數 ─────────────────────────────────────────────────────────
@@ -19,50 +23,42 @@ var SHEET_COL = {
 };
 
 var TAIPEI_PREFIX = '臺北市';
+var GEOCODE_BATCH_SIZE = 30;  // 每批次 geocoding 筆數（約 30 秒內完成）
 
-// ── 主流程（由前端呼叫）─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+//  階段一：匯入並寫入地址 / 時間（不進行 geocoding）
+// ══════════════════════════════════════════════════════════════════
+
 /**
- * 接收前端傳來的 base64 Excel 內容，執行完整 ETL 流程。
- * @param {string} base64Data  Excel 檔案的 base64 字串
- * @param {string} fileName    原始檔案名稱（含副檔名）
- * @returns {string} 處理結果訊息
+ * 接收前端 base64 Excel，匯入資料、補齊地址、轉換時間。
+ * Geocoding 留給階段二分批進行。
+ * @returns {{ sheets: string[], totalRows: Object }} 分頁名稱與各分頁資料列數
  */
 function processExcelUpload(base64Data, fileName) {
   var tempFileId;
   try {
-    // 1. 將 Excel 暫存至 Drive 並轉為 Sheets 格式
     var sheetFileId = importExcelToDrive(base64Data, fileName);
     tempFileId = sheetFileId;
 
-    // 2. 取得來源試算表所有分頁
-    var sourceSS = SpreadsheetApp.openById(sheetFileId);
-    var sourceSheets = sourceSS.getSheets();
+    var sourceSS  = SpreadsheetApp.openById(sheetFileId);
+    var targetSS  = openTargetSpreadsheet();
+    var sheetMeta = [];  // [{ name, dataRows }]
 
-    var targetSS = openTargetSpreadsheet();
-    var processedSheets = [];
-
-    sourceSheets.forEach(function(srcSheet) {
+    sourceSS.getSheets().forEach(function(srcSheet) {
       var sheetName = srcSheet.getName();
       var rows = getSheetData(srcSheet);
-      if (rows.length === 0) return;
+      if (rows.length <= 1) return;  // 只有標題或空白，略過
 
-      // 3. 在目標試算表建立（或清空）對應分頁
       var destSheet = getOrCreateSheet(targetSS, sheetName);
-
-      // 4. ETL 每一列資料
-      var outputRows = transformRows(rows);
-
-      // 5. 寫入目標分頁
-      writeOutputRows(destSheet, outputRows);
-      processedSheets.push(sheetName);
+      var dataRows  = importAddressAndTime(rows, destSheet);
+      sheetMeta.push({ name: sheetName, dataRows: dataRows });
     });
 
-    return '完成！已處理分頁：' + processedSheets.join('、');
+    return { sheets: sheetMeta };
   } catch (err) {
     Logger.log('processExcelUpload error: ' + err);
-    throw new Error('處理失敗：' + err.message);
+    throw new Error('匯入失敗：' + err.message);
   } finally {
-    // 6. 刪除暫存的 Sheets 檔案
     if (tempFileId) {
       try { DriveApp.getFileById(tempFileId).setTrashed(true); } catch (_) {}
     }
@@ -70,11 +66,67 @@ function processExcelUpload(base64Data, fileName) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  階段二：分批 Geocoding（前端輪詢）
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * 對目標分頁 G 欄的地址進行一批次 geocoding，結果寫入 D、E 欄。
+ * 前端應持續呼叫直到 done === true。
+ *
+ * @param {string} sheetName  目標分頁名稱
+ * @param {number} startRow   從哪一列開始（1-based，資料從第 2 列起）
+ * @returns {{ done: boolean, nextRow: number, processed: number, total: number }}
+ */
+function geocodeNextBatch(sheetName, startRow) {
+  var ss    = openTargetSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('找不到分頁：' + sheetName);
+
+  var lastRow = sheet.getLastRow();
+  // 資料從第 2 列開始（第 1 列為標題）
+  var dataStart = Math.max(startRow, 2);
+  var total     = lastRow - 1;  // 資料列總數（不含標題）
+
+  if (dataStart > lastRow) {
+    return { done: true, nextRow: dataStart, processed: 0, total: total };
+  }
+
+  var endRow    = Math.min(dataStart + GEOCODE_BATCH_SIZE - 1, lastRow);
+  var batchLen  = endRow - dataStart + 1;
+
+  // 批次讀取 G 欄地址
+  var addresses = sheet
+    .getRange(dataStart, SHEET_COL.ADDRESS, batchLen, 1)
+    .getValues();
+
+  // 批次 geocoding 並寫入 D、E 欄
+  for (var i = 0; i < batchLen; i++) {
+    var addr   = String(addresses[i][0] || '').trim();
+    var coords = geocodeAddress(addr);
+    var row    = dataStart + i;
+    if (coords.lat !== null) {
+      sheet.getRange(row, SHEET_COL.LAT).setValue(coords.lat);
+      sheet.getRange(row, SHEET_COL.LNG).setValue(coords.lng);
+    }
+  }
+
+  SpreadsheetApp.flush();
+
+  var nextRow = endRow + 1;
+  return {
+    done:      nextRow > lastRow,
+    nextRow:   nextRow,
+    processed: batchLen,
+    total:     total
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  模組一：Drive 檔案處理
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * 將 base64 Excel 上傳至 Drive，並以 Google Sheets 格式轉換。
+ * 將 base64 Excel 上傳至 Drive 並轉換為 Google Sheets 格式。
  * 回傳轉換後的 Sheets 檔案 ID。
  */
 function importExcelToDrive(base64Data, fileName) {
@@ -83,7 +135,6 @@ function importExcelToDrive(base64Data, fileName) {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     fileName
   );
-  // Drive API v2：insert 時加上 convert=true 自動轉為 Sheets
   var file = Drive.Files.insert(
     { title: fileName, mimeType: 'application/vnd.google-apps.spreadsheet' },
     blob,
@@ -96,15 +147,10 @@ function importExcelToDrive(base64Data, fileName) {
 //  模組二：試算表操作
 // ══════════════════════════════════════════════════════════════════
 
-/** 開啟目標試算表 */
 function openTargetSpreadsheet() {
   return SpreadsheetApp.openById(ETL_TARGET_SS_ID);
 }
 
-/**
- * 取得分頁中所有資料列（含標題列）。
- * @returns {Array<Array>} 二維陣列，空表回傳 []
- */
 function getSheetData(sheet) {
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
@@ -112,10 +158,6 @@ function getSheetData(sheet) {
   return sheet.getRange(1, 1, lastRow, lastCol).getValues();
 }
 
-/**
- * 在試算表中取得或建立指定名稱的分頁。
- * 若分頁已存在，清除內容後重用。
- */
 function getOrCreateSheet(ss, sheetName) {
   var sheet = ss.getSheetByName(sheetName);
   if (sheet) {
@@ -127,92 +169,53 @@ function getOrCreateSheet(ss, sheetName) {
 }
 
 /**
- * 將輸出列寫入目標分頁。
- * 每列為物件 { rowIndex, timeValue, address, lat, lng }，
- * 以 1-based rowIndex 對應目標列號。
+ * 階段一寫入：補齊地址→G欄，轉換時間→B欄。
+ * 使用批次寫入（setValues）提高效能。
+ * @returns {number} 寫入的資料列數
  */
-function writeOutputRows(destSheet, outputRows) {
-  if (outputRows.length === 0) return;
+function importAddressAndTime(rows, destSheet) {
+  var dataRows = rows.length - 1;  // 扣除標題列
+  if (dataRows <= 0) return 0;
 
-  outputRows.forEach(function(item) {
-    var r = item.rowIndex;
+  // 預先建立 B 欄和 G 欄的批次陣列
+  var timeValues    = [];
+  var addressValues = [];
 
-    if (item.timeValue !== null) {
-      var timeCell = destSheet.getRange(r, SHEET_COL.TIME);
-      timeCell.setValue(item.timeValue);
-      // 設定日期時間格式
-      timeCell.setNumberFormat('yyyy/MM/dd HH:mm:ss');
-    }
-
-    if (item.address) {
-      destSheet.getRange(r, SHEET_COL.ADDRESS).setValue(item.address);
-    }
-
-    if (item.lat !== null && item.lng !== null) {
-      destSheet.getRange(r, SHEET_COL.LAT).setValue(item.lat);
-      destSheet.getRange(r, SHEET_COL.LNG).setValue(item.lng);
-    }
-  });
-
-  SpreadsheetApp.flush();
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  模組三：資料轉換（列層級）
-// ══════════════════════════════════════════════════════════════════
-
-/**
- * 對來源分頁的所有資料列進行 ETL 轉換。
- * 略過標題列（第 1 列），從第 2 列開始處理。
- * @returns {Array<Object>}
- */
-function transformRows(rows) {
-  var output = [];
-
-  for (var i = 1; i < rows.length; i++) {
-    var row = rows[i];
-    var rowIndex = i + 1; // Google Sheets 列號（1-based）
-
+  for (var i = 1; i <= dataRows; i++) {
+    var row        = rows[i];
     var rawTime    = row[EXCEL_COL.TIME - 1];
-    var rawAddress = row[EXCEL_COL.ADDRESS - 1];
+    var rawAddress = String(row[EXCEL_COL.ADDRESS - 1] || '').trim();
 
-    // 跳過完全空白的列
-    if (!rawTime && !rawAddress) continue;
-
-    var timeValue   = convertExcelDateTime(rawTime);
-    var fullAddress = completeAddress(String(rawAddress || '').trim());
-    var coords      = fullAddress ? geocodeAddress(fullAddress) : { lat: null, lng: null };
-
-    output.push({
-      rowIndex:  rowIndex,
-      timeValue: timeValue,
-      address:   fullAddress,
-      lat:       coords.lat,
-      lng:       coords.lng
-    });
+    timeValues.push([convertExcelDateTime(rawTime)]);
+    addressValues.push([completeAddress(rawAddress)]);
   }
 
-  return output;
+  // 批次寫入 B 欄（時間）
+  var timeRange = destSheet.getRange(2, SHEET_COL.TIME, dataRows, 1);
+  timeRange.setValues(timeValues);
+  timeRange.setNumberFormat('yyyy/MM/dd HH:mm:ss');
+
+  // 批次寫入 G 欄（補齊地址）
+  destSheet.getRange(2, SHEET_COL.ADDRESS, dataRows, 1).setValues(addressValues);
+
+  SpreadsheetApp.flush();
+  return dataRows;
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  模組四：地址補齊
+//  模組三：地址補齊
 // ══════════════════════════════════════════════════════════════════
 
 /**
  * 將部分地址補齊為含「臺北市XXX區」的完整格式。
- * 優先使用 Maps geocoder 取得格式化地址；
- * 若 geocoder 失敗，僅加上「臺北市」前綴。
+ * 使用 Maps geocoder 取得格式化地址；失敗時僅補上「臺北市」前綴。
  * @param {string} partial  例："西寧南路36號"
  * @returns {string} 例："臺北市萬華區西寧南路36號"
  */
 function completeAddress(partial) {
   if (!partial) return '';
-
-  // 若已含臺北市，直接回傳
   if (partial.indexOf(TAIPEI_PREFIX) === 0) return partial;
 
-  // 先嘗試以「臺北市 + 部分地址」進行地理編碼
   var query = TAIPEI_PREFIX + partial;
   try {
     var result = Maps.newGeocoder()
@@ -222,68 +225,43 @@ function completeAddress(partial) {
 
     if (result.status === 'OK' && result.results.length > 0) {
       var formatted = result.results[0].formatted_address;
-      // 確認格式化結果確實含臺北市
       if (formatted && formatted.indexOf(TAIPEI_PREFIX) !== -1) {
         return extractTaipeiAddress(formatted);
       }
     }
   } catch (e) {
-    Logger.log('completeAddress geocode error: ' + e);
+    Logger.log('completeAddress error: ' + e);
   }
 
-  // Fallback：直接補上臺北市前綴
-  return query;
+  return query;  // Fallback
 }
 
-/**
- * 從 Google Maps 格式化地址中擷取「臺北市…」之後的部分。
- * 格式化地址通常形如 "106, 大安區仁愛路四段1號, 臺北市, 台灣"
- * 或 "臺北市大安區仁愛路四段1號"
- */
 function extractTaipeiAddress(formatted) {
   var idx = formatted.indexOf(TAIPEI_PREFIX);
   if (idx === -1) return formatted;
-
-  // 取出「臺北市」之後的地址，移除尾端的國家/郵遞區號等片段
-  var addr = formatted.substring(idx);
-  // 去除末尾逗號分隔的「台灣」或郵遞區號
-  addr = addr.split(',')[0].trim();
-  return addr;
+  return formatted.substring(idx).split(',')[0].trim();
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  模組五：時間格式轉換
+//  模組四：時間格式轉換
 // ══════════════════════════════════════════════════════════════════
 
 /**
- * 將 Excel 的日期/時間值轉換為 JavaScript Date。
- * 支援三種情況：
- *   1. 數字（Excel 日期序號）
- *   2. Date 物件（Apps Script 自動解析）
- *   3. 字串（嘗試多種格式解析）
+ * 將 Excel 日期/時間值轉換為 JavaScript Date。
+ * 支援：數字序號、Date 物件、字串。
  * @returns {Date|null}
  */
 function convertExcelDateTime(value) {
   if (!value && value !== 0) return null;
-
-  // Apps Script 有時已自動轉為 Date
   if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
 
-  // Excel 日期序號（數字）：1900-01-01 = 1
-  if (typeof value === 'number') {
-    return excelSerialToDate(value);
-  }
+  if (typeof value === 'number') return excelSerialToDate(value);
 
-  // 字串：嘗試直接解析
   if (typeof value === 'string') {
     var str = value.trim();
     if (!str) return null;
-
-    // 常見台灣格式：2024/01/15 08:30:00
     var d = new Date(str.replace(/\//g, '-'));
     if (!isNaN(d.getTime())) return d;
-
-    // ISO 格式
     d = new Date(str);
     if (!isNaN(d.getTime())) return d;
   }
@@ -291,22 +269,18 @@ function convertExcelDateTime(value) {
   return null;
 }
 
-/**
- * 將 Excel 日期序號轉為 Date（基準：1899-12-30，修正 Excel 的 1900 閏年 bug）。
- */
+/** Excel 日期序號 → Date（修正 1900 閏年 bug）*/
 function excelSerialToDate(serial) {
-  var BASE_MS = new Date(1899, 11, 30).getTime(); // 1899-12-30
-  var MS_PER_DAY = 86400000;
-  return new Date(BASE_MS + Math.round(serial * MS_PER_DAY));
+  var BASE_MS = new Date(1899, 11, 30).getTime();
+  return new Date(BASE_MS + Math.round(serial * 86400000));
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  模組六：地理編碼
+//  模組五：地理編碼
 // ══════════════════════════════════════════════════════════════════
 
 /**
  * 將完整地址轉換為經緯度座標。
- * @param {string} address  完整地址，例："臺北市萬華區西寧南路36號"
  * @returns {{ lat: number|null, lng: number|null }}
  */
 function geocodeAddress(address) {

@@ -9,11 +9,10 @@
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
       margin: 0; padding: 40px 24px;
-      background: #f8f9fa; color: #202124;
-      font-size: 15px;
+      background: #f8f9fa; color: #202124; font-size: 15px;
     }
     .card {
-      max-width: 520px; margin: 0 auto;
+      max-width: 560px; margin: 0 auto;
       background: #fff; border-radius: 8px;
       padding: 32px; box-shadow: 0 1px 4px rgba(0,0,0,.15);
     }
@@ -31,14 +30,33 @@
       font-size: 15px; font-weight: 600;
     }
     button:disabled { background: #bbb; cursor: not-allowed; }
+
+    /* 進度區塊 */
+    #progressSection { display: none; margin-top: 24px; }
+    .sheet-item { margin-bottom: 16px; }
+    .sheet-name { font-weight: 600; margin-bottom: 4px; font-size: 13px; }
+    .bar-wrap {
+      background: #e8eaed; border-radius: 4px;
+      height: 10px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; background: #1a73e8;
+      border-radius: 4px; width: 0%;
+      transition: width .3s;
+    }
+    .bar-label {
+      font-size: 12px; color: #5f6368;
+      margin-top: 4px;
+    }
+
     #status {
       margin-top: 20px; padding: 12px 16px;
-      border-radius: 4px; display: none;
-      font-size: 14px; line-height: 1.5;
+      border-radius: 4px; display: none; font-size: 14px; line-height: 1.5;
     }
     #status.info    { background: #e8f0fe; color: #1a73e8; display: block; }
     #status.success { background: #e6f4ea; color: #137333; display: block; }
     #status.error   { background: #fce8e6; color: #c5221f; display: block; }
+
     .steps {
       margin: 24px 0 0; padding: 16px;
       background: #f1f3f4; border-radius: 4px;
@@ -48,72 +66,165 @@
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>ETL 地址座標轉換</h2>
-    <p class="desc">
-      上傳 Excel 檔案，自動補齊臺北市地址、轉換時間格式，並將地址轉換為經緯度座標，寫入目標試算表。
-    </p>
+<div class="card">
+  <h2>ETL 地址座標轉換</h2>
+  <p class="desc">
+    上傳 Excel 檔案，自動補齊臺北市地址、轉換時間格式，<br>
+    並以分批方式將地址轉換為經緯度，寫入目標試算表。
+  </p>
 
-    <label for="excelFile">選擇 Excel 檔案（.xlsx）</label>
-    <input type="file" id="excelFile" accept=".xlsx">
-    <button id="uploadBtn" onclick="startUpload()">開始轉換</button>
+  <label for="excelFile">選擇 Excel 檔案（.xlsx）</label>
+  <input type="file" id="excelFile" accept=".xlsx">
+  <button id="uploadBtn" onclick="startUpload()">開始轉換</button>
 
-    <div id="status"></div>
-
-    <div class="steps">
-      <strong>處理流程：</strong><br>
-      1. 讀取 Excel E 欄地址 → 補齊為「臺北市XXX區…」格式 → 寫入 G 欄<br>
-      2. 讀取 Excel D 欄時間 → 轉換格式 → 寫入 B 欄<br>
-      3. G 欄地址 → 地理編碼 → 緯度寫入 D 欄、經度寫入 E 欄<br>
-      4. 分頁名稱與 Excel 中的分頁名稱相同
-    </div>
+  <!-- 進度顯示 -->
+  <div id="progressSection">
+    <div id="sheetBars"></div>
   </div>
 
-  <script>
-    function startUpload() {
-      var fileInput = document.getElementById('excelFile');
-      var btn       = document.getElementById('uploadBtn');
+  <div id="status"></div>
 
-      if (!fileInput.files || fileInput.files.length === 0) {
-        setStatus('請先選擇 Excel 檔案。', 'error');
-        return;
-      }
+  <div class="steps">
+    <strong>處理流程：</strong><br>
+    ① 讀取 Excel E 欄 → 補齊「臺北市XXX區…」→ 寫入 G 欄<br>
+    ② 讀取 Excel D 欄時間 → 轉換格式 → 寫入 B 欄<br>
+    ③ 分批對 G 欄地址地理編碼 → 緯度→D欄、經度→E欄
+  </div>
+</div>
 
-      var file   = fileInput.files[0];
-      var reader = new FileReader();
+<script>
+  // 每批完成後稍作延遲再呼叫下一批，避免過快請求
+  var BATCH_DELAY_MS = 500;
 
-      btn.disabled = true;
-      setStatus('讀取檔案中…', 'info');
+  function startUpload() {
+    var fileInput = document.getElementById('excelFile');
+    var btn       = document.getElementById('uploadBtn');
 
-      reader.onload = function(e) {
-        var base64 = e.target.result.split(',')[1];
-        setStatus('上傳並處理中，請稍候（依資料量可能需要數分鐘）…', 'info');
-
-        google.script.run
-          .withSuccessHandler(function(msg) {
-            setStatus('✓ ' + msg, 'success');
-            btn.disabled = false;
-          })
-          .withFailureHandler(function(err) {
-            setStatus('錯誤：' + err.message, 'error');
-            btn.disabled = false;
-          })
-          .processExcelUpload(base64, file.name);
-      };
-
-      reader.onerror = function() {
-        setStatus('檔案讀取失敗，請重試。', 'error');
-        btn.disabled = false;
-      };
-
-      reader.readAsDataURL(file);
+    if (!fileInput.files || !fileInput.files.length) {
+      setStatus('請先選擇 Excel 檔案。', 'error');
+      return;
     }
 
-    function setStatus(msg, cls) {
-      var el = document.getElementById('status');
-      el.textContent = msg;
-      el.className = cls;
+    var file   = fileInput.files[0];
+    var reader = new FileReader();
+    btn.disabled = true;
+    setStatus('讀取檔案中…', 'info');
+
+    reader.onload = function(e) {
+      var base64 = e.target.result.split(',')[1];
+      setStatus('階段一：匯入資料並補齊地址，請稍候…', 'info');
+
+      google.script.run
+        .withSuccessHandler(onImportDone)
+        .withFailureHandler(onError)
+        .processExcelUpload(base64, file.name);
+    };
+
+    reader.onerror = function() {
+      setStatus('檔案讀取失敗，請重試。', 'error');
+      btn.disabled = false;
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  // ── 階段一完成：開始分批 geocoding ─────────────────────────
+  function onImportDone(result) {
+    var sheets = result.sheets;
+    if (!sheets || !sheets.length) {
+      setStatus('Excel 中沒有有效資料。', 'error');
+      document.getElementById('uploadBtn').disabled = false;
+      return;
     }
-  </script>
+
+    // 建立各分頁的進度條
+    var section  = document.getElementById('progressSection');
+    var barsDiv  = document.getElementById('sheetBars');
+    barsDiv.innerHTML = '';
+    section.style.display = 'block';
+
+    var state = sheets.map(function(s) {
+      var item = document.createElement('div');
+      item.className  = 'sheet-item';
+      item.innerHTML  =
+        '<div class="sheet-name">📄 ' + s.name + '</div>' +
+        '<div class="bar-wrap"><div class="bar-fill" id="bar-' + encodeId(s.name) + '"></div></div>' +
+        '<div class="bar-label" id="lbl-' + encodeId(s.name) + '">等待中…</div>';
+      barsDiv.appendChild(item);
+      return { name: s.name, dataRows: s.dataRows, nextRow: 2, done: false };
+    });
+
+    setStatus('階段二：地理編碼進行中，請勿關閉此頁面…', 'info');
+    processNextSheet(state, 0);
+  }
+
+  // 逐一處理每個分頁的 geocoding
+  function processNextSheet(state, idx) {
+    if (idx >= state.length) {
+      setStatus('✓ 全部完成！', 'success');
+      document.getElementById('uploadBtn').disabled = false;
+      return;
+    }
+    var s = state[idx];
+    if (s.done) {
+      processNextSheet(state, idx + 1);
+      return;
+    }
+    geocodeBatch(state, idx);
+  }
+
+  function geocodeBatch(state, idx) {
+    var s = state[idx];
+    google.script.run
+      .withSuccessHandler(function(res) {
+        updateBar(s.name, res.nextRow - 2, s.dataRows);
+        s.nextRow = res.nextRow;
+        s.done    = res.done;
+
+        if (res.done) {
+          updateBar(s.name, s.dataRows, s.dataRows);
+          setTimeout(function() { processNextSheet(state, idx + 1); }, BATCH_DELAY_MS);
+        } else {
+          setTimeout(function() { geocodeBatch(state, idx); }, BATCH_DELAY_MS);
+        }
+      })
+      .withFailureHandler(function(err) {
+        setLabel(s.name, '⚠ 地理編碼失敗：' + err.message);
+        // 跳過此分頁，繼續下一個
+        setTimeout(function() { processNextSheet(state, idx + 1); }, BATCH_DELAY_MS);
+      })
+      .geocodeNextBatch(s.name, s.nextRow);
+  }
+
+  // ── 工具函式 ─────────────────────────────────────────────────
+  function updateBar(sheetName, done, total) {
+    var pct = total > 0 ? Math.round(done / total * 100) : 100;
+    var id  = encodeId(sheetName);
+    var bar = document.getElementById('bar-' + id);
+    var lbl = document.getElementById('lbl-' + id);
+    if (bar) bar.style.width = pct + '%';
+    if (lbl) lbl.textContent = done + ' / ' + total + ' 筆（' + pct + '%）';
+  }
+
+  function setLabel(sheetName, text) {
+    var lbl = document.getElementById('lbl-' + encodeId(sheetName));
+    if (lbl) lbl.textContent = text;
+  }
+
+  function encodeId(name) {
+    return name.replace(/[^a-zA-Z0-9]/g, '_');
+  }
+
+  function setStatus(msg, cls) {
+    var el = document.getElementById('status');
+    el.textContent = msg;
+    el.className   = cls;
+  }
+
+  function onError(err) {
+    setStatus('錯誤：' + err.message, 'error');
+    document.getElementById('uploadBtn').disabled = false;
+  }
+</script>
 </body>
 </html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; font-size: 14px; }
+    label { display: block; margin-bottom: 8px; font-weight: bold; }
+    input[type="file"] { margin-bottom: 16px; width: 100%; }
+    button { padding: 8px 20px; background: #1a73e8; color: #fff;
+             border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #status { margin-top: 16px; color: #444; min-height: 24px; }
+    #status.error { color: #c62828; }
+    #status.success { color: #2e7d32; }
+  </style>
+</head>
+<body>
+  <label for="excelFile">選擇 Excel 檔案（.xlsx）</label>
+  <input type="file" id="excelFile" accept=".xlsx">
+  <button id="uploadBtn" onclick="startUpload()">開始上傳與轉換</button>
+  <div id="status"></div>
+
+  <script>
+    function startUpload() {
+      var fileInput = document.getElementById('excelFile');
+      var btn       = document.getElementById('uploadBtn');
+      var status    = document.getElementById('status');
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        setStatus('請先選擇 Excel 檔案。', 'error');
+        return;
+      }
+
+      var file   = fileInput.files[0];
+      var reader = new FileReader();
+
+      btn.disabled = true;
+      setStatus('讀取檔案中…', '');
+
+      reader.onload = function(e) {
+        // 移除 data URL 前綴，只保留 base64 部分
+        var base64 = e.target.result.split(',')[1];
+        setStatus('上傳並處理中，請稍候（依資料量可能需要數分鐘）…', '');
+
+        google.script.run
+          .withSuccessHandler(function(msg) {
+            setStatus(msg, 'success');
+            btn.disabled = false;
+          })
+          .withFailureHandler(function(err) {
+            setStatus('錯誤：' + err.message, 'error');
+            btn.disabled = false;
+          })
+          .processExcelUpload(base64, file.name);
+      };
+
+      reader.onerror = function() {
+        setStatus('檔案讀取失敗，請重試。', 'error');
+        btn.disabled = false;
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    function setStatus(msg, cls) {
+      var el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = cls || '';
+    }
+  </script>
+</body>
+</html>

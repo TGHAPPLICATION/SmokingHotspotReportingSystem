@@ -1476,7 +1476,35 @@ function addSheetLayer(layer) {
     map.on('mouseleave', layer.clusterLayerId, function() { map.getCanvas().style.cursor = ''; });
   }
 
-  // ── 點位 layer（分群展開後的散點 + points 模式共用）
+  // ── 分群展開後的個別點（source: clusterSource, filter: !has point_count）
+  if (!map.getLayer(layer.clusterSingleId)) {
+    map.addLayer({
+      id: layer.clusterSingleId, type: 'circle', source: layer.clusterSourceId,
+      filter: ['!', ['has', 'point_count']],
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 5, 18, 11],
+        'circle-color': layer.color, 'circle-opacity': 0.88,
+        'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.75
+      }
+    });
+    map.on('click', layer.clusterSingleId, function(e) {
+      var props = e.features[0].properties;
+      var coords = e.features[0].geometry.coordinates.slice();
+      var html = '<div style="color:' + layer.color + ';font-size:.72rem;font-weight:700;margin-bottom:5px;">' + esc(layer.name) + '</div>';
+      Object.keys(props).forEach(function(k) {
+        var v = props[k];
+        if (v !== null && v !== '' && k !== 'lat' && k !== 'lng' && k !== 'latitude' && k !== 'longitude' && k !== 'cluster_id') {
+          html += '<div class="popup-desc"><span style="color:#6e7681;">' + esc(k) + '：</span>' + esc(String(v)) + '</div>';
+        }
+      });
+      new maplibregl.Popup({ offset: 10, maxWidth: '240px' }).setLngLat(coords).setHTML(html).addTo(map);
+    });
+    map.on('mouseenter', layer.clusterSingleId, function() { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', layer.clusterSingleId, function() { map.getCanvas().style.cursor = ''; });
+  }
+
+  // ── 點位 layer（points 模式，使用原始 source）
   if (!map.getLayer(layer.layerId)) {
     map.addLayer({
       id: layer.layerId, type: 'circle', source: layer.sourceId,
@@ -1583,10 +1611,11 @@ function setSheetLayerMode(layer, mode) {
   var h = mode === 'heatmap' ? 'visible' : 'none';
   var c = mode === 'cluster' ? 'visible' : 'none';
   var p = mode === 'points'  ? 'visible' : 'none';
-  if (map.getLayer(layer.heatLayerId))    map.setLayoutProperty(layer.heatLayerId,    'visibility', h);
-  if (map.getLayer(layer.clusterGlowId))  map.setLayoutProperty(layer.clusterGlowId,  'visibility', c);
-  if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', c);
-  if (map.getLayer(layer.layerId))        map.setLayoutProperty(layer.layerId,        'visibility', p);
+  if (map.getLayer(layer.heatLayerId))      map.setLayoutProperty(layer.heatLayerId,      'visibility', h);
+  if (map.getLayer(layer.clusterGlowId))    map.setLayoutProperty(layer.clusterGlowId,    'visibility', c);
+  if (map.getLayer(layer.clusterLayerId))   map.setLayoutProperty(layer.clusterLayerId,   'visibility', c);
+  if (map.getLayer(layer.clusterSingleId))  map.setLayoutProperty(layer.clusterSingleId,  'visibility', c); // 展開後個別點
+  if (map.getLayer(layer.layerId))          map.setLayoutProperty(layer.layerId,          'visibility', p);
 }
 
 /** 更新單一 sheet layer 的 supercluster 結果 */
@@ -1651,10 +1680,11 @@ function applySheetNames(names) {
       name: name, safeName: sn, color: color,
       sourceId:        'src-pt-' + sn,
       clusterSourceId: 'src-cl-' + sn,
-      layerId:         'lyr-pt-' + sn,
-      heatLayerId:     'lyr-ht-' + sn,
-      clusterGlowId:   'lyr-cg-' + sn,
-      clusterLayerId:  'lyr-cl-' + sn,
+      layerId:           'lyr-pt-' + sn,
+      heatLayerId:       'lyr-ht-' + sn,
+      clusterGlowId:     'lyr-cg-' + sn,
+      clusterLayerId:    'lyr-cl-' + sn,
+      clusterSingleId:   'lyr-cs-' + sn,   // 分群展開後的個別點
       visible: false, loaded: false,
       features: [], sc: null, hasTime: false
     };

@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>吸菸熱點地圖儀表板</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- MarkerCluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <style>
+    /* ── Reset & base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: #0f1420; color: #e8ecf0; }
+
+    /* ── Top bar ──────────────────────────────────────────── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      height: 52px; background: #1e2533;
+      display: flex; align-items: center; padding: 0 16px; gap: 14px;
+      border-bottom: 1px solid #2e3a4e;
+    }
+    #topbar .title {
+      font-size: 16px; font-weight: 600; white-space: nowrap;
+      color: #ffffff; letter-spacing: 0.02em;
+    }
+    #topbar .title span { color: #5b9cf6; }
+
+    #layer-select {
+      flex: 1; max-width: 260px;
+      background: #2a3347; color: #e8ecf0;
+      border: 1px solid #3a4a63; border-radius: 6px;
+      padding: 5px 10px; font-size: 13px; cursor: pointer;
+      outline: none;
+    }
+    #layer-select:focus { border-color: #5b9cf6; }
+
+    #topbar .form-link {
+      margin-left: auto;
+      color: #7eb8f7; font-size: 13px; text-decoration: none;
+      white-space: nowrap; padding: 4px 10px;
+      border: 1px solid #3a4a63; border-radius: 5px;
+      transition: background 0.15s;
+    }
+    #topbar .form-link:hover { background: #2a3347; }
+
+    /* ── Layout shell ─────────────────────────────────────── */
+    #shell {
+      display: flex;
+      position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
+    }
+
+    /* ── Sidebar ──────────────────────────────────────────── */
+    #sidebar {
+      width: 260px; flex-shrink: 0;
+      background: #1e2533;
+      border-right: 1px solid #2e3a4e;
+      overflow-y: auto;
+      padding: 18px 14px;
+      display: flex; flex-direction: column; gap: 22px;
+    }
+
+    .ctrl-section {}
+    .ctrl-section .section-title {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #8a9bbf;
+      margin-bottom: 10px;
+    }
+
+    /* Display mode toggle buttons */
+    .mode-btns { display: flex; gap: 6px; }
+    .mode-btn {
+      flex: 1; padding: 7px 0;
+      background: #2a3347; color: #c0cce0;
+      border: 1px solid #3a4a63; border-radius: 6px;
+      font-size: 13px; cursor: pointer; text-align: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .mode-btn:hover { background: #32405a; }
+    .mode-btn.active {
+      background: #1a5fd4; color: #ffffff; border-color: #3a7af5;
+    }
+
+    /* Time slot buttons */
+    .time-btns { display: flex; flex-direction: column; gap: 6px; }
+    .time-btn {
+      padding: 7px 14px;
+      background: #2a3347; color: #c0cce0;
+      border: 1px solid #3a4a63; border-radius: 20px;
+      font-size: 13px; cursor: pointer; text-align: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .time-btn:hover:not(:disabled) { background: #32405a; }
+    .time-btn.active {
+      background: #1a5fd4; color: #ffffff; border-color: #3a7af5;
+    }
+    .time-btn:disabled {
+      background: #1e2533; color: #445066;
+      border-color: #2a3347; cursor: not-allowed; opacity: 0.55;
+    }
+
+    .no-time-note {
+      font-size: 11px; color: #66778f; margin-top: 6px;
+      line-height: 1.4; display: none;
+    }
+    .no-time-note.visible { display: block; }
+
+    /* Stats panel */
+    .stats { font-size: 12px; color: #8a9bbf; line-height: 1.8; }
+    .stats strong { color: #c0cce0; }
+
+    /* ── Map ──────────────────────────────────────────────── */
+    #map {
+      flex: 1; min-width: 0;
+      background: #0f1420;
+    }
+
+    /* ── Loading overlay ──────────────────────────────────── */
+    #loading {
+      position: absolute; inset: 0; z-index: 900;
+      background: rgba(15,20,32,0.72);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px; pointer-events: none;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    #loading.visible { opacity: 1; pointer-events: all; }
+    .spinner {
+      width: 38px; height: 38px;
+      border: 4px solid #2a3347;
+      border-top-color: #5b9cf6;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 14px; color: #8a9bbf; }
+
+    /* ── Responsive: mobile ───────────────────────────────── */
+    @media (max-width: 767px) {
+      #shell { flex-direction: column-reverse; }
+
+      #sidebar {
+        width: 100%; height: auto; max-height: 220px;
+        border-right: none; border-top: 1px solid #2e3a4e;
+        flex-direction: row; overflow-x: auto; overflow-y: hidden;
+        gap: 16px; padding: 12px 14px;
+        flex-shrink: 0;
+      }
+      .ctrl-section { min-width: 140px; }
+      .time-btns { flex-direction: row; flex-wrap: wrap; }
+      .time-btn { padding: 5px 10px; font-size: 12px; }
+      .mode-btns { flex-direction: column; }
+
+      #map { flex: 1; min-height: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ─────────────────────────────────────────────── -->
+<div id="topbar">
+  <div class="title">吸菸熱點<span>地圖</span></div>
+  <select id="layer-select">
+    <option value="">— 載入圖層中 —</option>
+  </select>
+  <a href="#" id="form-link" class="form-link">+ 新增通報</a>
+</div>
+
+<!-- ── Main shell ───────────────────────────────────────────── -->
+<div id="shell">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+
+    <div class="ctrl-section">
+      <div class="section-title">顯示方式</div>
+      <div class="mode-btns">
+        <button class="mode-btn active" data-mode="points">點位</button>
+        <button class="mode-btn" data-mode="cluster">分群</button>
+        <button class="mode-btn" data-mode="heat">熱力圖</button>
+      </div>
+    </div>
+
+    <div class="ctrl-section">
+      <div class="section-title">時段篩選</div>
+      <div class="time-btns">
+        <button class="time-btn active" data-slot="all">全部</button>
+        <button class="time-btn" data-slot="0-3">00–04 時</button>
+        <button class="time-btn" data-slot="4-9">04–10 時</button>
+        <button class="time-btn" data-slot="10-15">10–16 時</button>
+        <button class="time-btn" data-slot="16-23">16–24 時</button>
+      </div>
+      <div class="no-time-note" id="no-time-note">此圖層無時間資料</div>
+    </div>
+
+    <div class="ctrl-section">
+      <div class="section-title">資料統計</div>
+      <div class="stats" id="stats">
+        <span id="stat-total">—</span> 筆資料<br/>
+        <span id="stat-shown">—</span> 筆顯示中
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Loading overlay (inside shell so map stays mounted) -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">載入資料中…</div>
+  </div>
+
+</div><!-- #shell -->
+
+<!-- Scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+var state = {
+  mode: 'points',      // 'points' | 'cluster' | 'heat'
+  slot: 'all',         // 'all' | '0-3' | '4-9' | '10-15' | '16-23'
+  data: [],            // full dataset for current layer
+  hasTime: false,      // whether current layer has any time data
+  activeLayer: null    // current Leaflet layer/group on map
+};
+
+// ── Map init ───────────────────────────────────────────────────
+var map = L.map('map', {
+  center: [25.05, 121.55],
+  zoom: 12,
+  zoomControl: true
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19
+}).addTo(map);
+
+// ── DOM refs ───────────────────────────────────────────────────
+var layerSelect  = document.getElementById('layer-select');
+var loadingEl    = document.getElementById('loading');
+var noTimeNote   = document.getElementById('no-time-note');
+var statTotal    = document.getElementById('stat-total');
+var statShown    = document.getElementById('stat-shown');
+
+var modeBtns = Array.prototype.slice.call(document.querySelectorAll('.mode-btn'));
+var timeBtns = Array.prototype.slice.call(document.querySelectorAll('.time-btn'));
+
+// ── Helpers ────────────────────────────────────────────────────
+function showLoading() { loadingEl.classList.add('visible'); }
+function hideLoading() { loadingEl.classList.remove('visible'); }
+
+function setActiveBtn(btnList, activeValue, attr) {
+  btnList.forEach(function(btn) {
+    var val = btn.getAttribute(attr);
+    btn.classList.toggle('active', val === activeValue);
+  });
+}
+
+// Parse ISO string or Date value → hour integer, or null
+function parseHour(val) {
+  if (!val) return null;
+  var d;
+  if (val instanceof Date) {
+    d = val;
+  } else {
+    var s = String(val).trim();
+    if (!s) return null;
+    d = new Date(s);
+  }
+  if (isNaN(d.getTime())) return null;
+  return d.getHours();
+}
+
+// Slot string → [min, max] hours inclusive
+var SLOT_RANGES = {
+  'all':   null,
+  '0-3':   [0, 3],
+  '4-9':   [4, 9],
+  '10-15': [10, 15],
+  '16-23': [16, 23]
+};
+
+function filterData(data, slot) {
+  if (slot === 'all') return data;
+  var range = SLOT_RANGES[slot];
+  if (!range) return data;
+  return data.filter(function(row) {
+    var h = parseHour(row.time);
+    if (h === null) return false;
+    return h >= range[0] && h <= range[1];
+  });
+}
+
+// ── Render map layer ───────────────────────────────────────────
+function renderMap() {
+  // Remove previous layer
+  if (state.activeLayer) {
+    map.removeLayer(state.activeLayer);
+    state.activeLayer = null;
+  }
+
+  var visible = filterData(state.data, state.slot);
+  statTotal.textContent = state.data.length;
+  statShown.textContent = visible.length;
+
+  if (visible.length === 0) return;
+
+  var mode = state.mode;
+
+  if (mode === 'points') {
+    var group = L.featureGroup();
+    visible.forEach(function(row) {
+      var marker = L.circleMarker([row.lat, row.lng], {
+        radius: 7,
+        fillColor: '#e84040',
+        color: '#fff',
+        weight: 1.5,
+        opacity: 1,
+        fillOpacity: 0.82
+      });
+      var popupLines = [];
+      if (row.address) popupLines.push('<b>地址：</b>' + row.address);
+      if (row.time)    popupLines.push('<b>時間：</b>' + formatTime(row.time));
+      marker.bindPopup(popupLines.join('<br/>') || '（無資料）');
+      group.addLayer(marker);
+    });
+    group.addTo(map);
+    state.activeLayer = group;
+
+  } else if (mode === 'cluster') {
+    var clusterGroup = L.markerClusterGroup({
+      maxClusterRadius: 50,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false
+    });
+    visible.forEach(function(row) {
+      var marker = L.marker([row.lat, row.lng]);
+      var popupLines = [];
+      if (row.address) popupLines.push('<b>地址：</b>' + row.address);
+      if (row.time)    popupLines.push('<b>時間：</b>' + formatTime(row.time));
+      marker.bindPopup(popupLines.join('<br/>') || '（無資料）');
+      clusterGroup.addLayer(marker);
+    });
+    clusterGroup.addTo(map);
+    state.activeLayer = clusterGroup;
+
+  } else if (mode === 'heat') {
+    var points = visible.map(function(row) {
+      return [row.lat, row.lng, 1];
+    });
+    var heat = L.heatLayer(points, {
+      radius: 25,
+      blur: 18,
+      maxZoom: 17,
+      gradient: { 0.3: '#2196f3', 0.6: '#ff9800', 1.0: '#f44336' }
+    });
+    heat.addTo(map);
+    state.activeLayer = heat;
+  }
+}
+
+function formatTime(val) {
+  if (!val) return '';
+  if (val instanceof Date) return val.toLocaleString('zh-TW');
+  var d = new Date(val);
+  if (isNaN(d.getTime())) return String(val);
+  return d.toLocaleString('zh-TW');
+}
+
+// ── Update time button states based on hasTime ─────────────────
+function updateTimeControls() {
+  var hasTime = state.hasTime;
+  timeBtns.forEach(function(btn) {
+    var slot = btn.getAttribute('data-slot');
+    if (slot === 'all') {
+      btn.disabled = false;
+    } else {
+      btn.disabled = !hasTime;
+    }
+  });
+  noTimeNote.classList.toggle('visible', !hasTime);
+
+  // If current slot is not 'all' but no time data, reset to 'all'
+  if (!hasTime && state.slot !== 'all') {
+    state.slot = 'all';
+    setActiveBtn(timeBtns, 'all', 'data-slot');
+  }
+}
+
+// ── Load layer data ────────────────────────────────────────────
+function loadLayer(sheetName) {
+  if (!sheetName) return;
+  showLoading();
+  statTotal.textContent = '—';
+  statShown.textContent = '—';
+
+  google.script.run
+    .withSuccessHandler(function(rows) {
+      state.data = rows || [];
+
+      // Detect if any row has a non-empty time value
+      state.hasTime = state.data.some(function(row) {
+        return row.time !== null && row.time !== undefined && row.time !== '';
+      });
+
+      updateTimeControls();
+      renderMap();
+      hideLoading();
+    })
+    .withFailureHandler(function(err) {
+      console.error('getLayerData error:', err);
+      hideLoading();
+      alert('載入圖層資料失敗：' + (err.message || err));
+    })
+    .getLayerData(sheetName);
+}
+
+// ── Load sheet names ───────────────────────────────────────────
+function loadSheetNames() {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function(names) {
+      layerSelect.innerHTML = '';
+      if (!names || names.length === 0) {
+        var opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '（無可用圖層）';
+        layerSelect.appendChild(opt);
+        hideLoading();
+        return;
+      }
+      names.forEach(function(name, i) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        layerSelect.appendChild(opt);
+      });
+      // Auto-load first layer
+      loadLayer(names[0]);
+    })
+    .withFailureHandler(function(err) {
+      console.error('getEtlSheetNames error:', err);
+      hideLoading();
+      layerSelect.innerHTML = '<option value="">載入失敗</option>';
+      alert('無法取得圖層清單：' + (err.message || err));
+    })
+    .getEtlSheetNames();
+}
+
+// ── Event listeners ────────────────────────────────────────────
+layerSelect.addEventListener('change', function() {
+  loadLayer(this.value);
+});
+
+modeBtns.forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    state.mode = this.getAttribute('data-mode');
+    setActiveBtn(modeBtns, state.mode, 'data-mode');
+    renderMap();
+  });
+});
+
+timeBtns.forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    if (this.disabled) return;
+    state.slot = this.getAttribute('data-slot');
+    setActiveBtn(timeBtns, state.slot, 'data-slot');
+    renderMap();
+  });
+});
+
+// ── Boot ───────────────────────────────────────────────────────
+// 動態設定「新增通報」連結（去除 ?page=dashboard 參數）
+document.getElementById('form-link').href =
+  window.location.href.replace(/[?&]page=[^&]*/g, '').replace(/[?&]$/, '') || window.location.pathname;
+
+loadSheetNames();
+</script>
+</body>
+</html>

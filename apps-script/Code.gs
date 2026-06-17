@@ -27,6 +27,14 @@ function doGet(e) {
     return getReportsJson(e);
   }
 
+  // 地圖儀表板
+  if (e && e.parameter && e.parameter.page === 'dashboard') {
+    return HtmlService
+      .createHtmlOutputFromFile('Dashboard')
+      .setTitle('吸菸熱點地圖儀表板')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
   // ETL 管理頁
   if (e && e.parameter && e.parameter.page === 'etl') {
     return HtmlService
@@ -201,4 +209,75 @@ function buildJsonResponse(obj, statusCode) {
   var output = ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
   return output;
+}
+
+// ── 儀表板資料 API ────────────────────────────────────────────
+
+var ETL_TARGET_SS_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
+
+/**
+ * 回傳 ETL 目標試算表中所有有資料的工作表名稱陣列。
+ * @returns {string[]}
+ */
+function getEtlSheetNames() {
+  var ss = SpreadsheetApp.openById(ETL_TARGET_SS_ID);
+  var sheets = ss.getSheets();
+  var names = [];
+  for (var i = 0; i < sheets.length; i++) {
+    var sheet = sheets[i];
+    // 跳過完全空白的工作表（只有標題列或無任何資料）
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) continue; // 0 = 空白, 1 = 只有標題
+    names.push(sheet.getName());
+  }
+  return names;
+}
+
+/**
+ * 讀取指定工作表的座標與時間資料。
+ * 欄位對應：B = 時間, D = 緯度, E = 經度, G = 完整地址
+ * @param {string} sheetName
+ * @returns {Array<{time: string|null, lat: number, lng: number, address: string}>}
+ */
+function getLayerData(sheetName) {
+  var ss = SpreadsheetApp.openById(ETL_TARGET_SS_ID);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) throw new Error('找不到工作表：' + sheetName);
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return []; // 只有標題或空白
+
+  // 讀取 B:G (columns 2–7)，從第 2 列開始（跳過標題）
+  var numRows = lastRow - 1;
+  var range = sheet.getRange(2, 1, numRows, 7); // A2:G(lastRow)
+  var values = range.getValues();
+
+  var result = [];
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    // 欄位索引（0-based）：A=0, B=1, C=2, D=3, E=4, F=5, G=6
+    var timeVal = row[1]; // 欄 B
+    var lat     = parseFloat(row[3]); // 欄 D
+    var lng     = parseFloat(row[4]); // 欄 E
+    var address = String(row[6] || '').trim(); // 欄 G
+
+    // 緯度或經度無效則略過
+    if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) continue;
+
+    // 時間：若為 Date 物件轉為 ISO 字串；空值設為 null
+    var timeOut = null;
+    if (timeVal instanceof Date && !isNaN(timeVal.getTime())) {
+      timeOut = timeVal.toISOString();
+    } else if (timeVal !== null && timeVal !== undefined && String(timeVal).trim() !== '') {
+      timeOut = String(timeVal).trim();
+    }
+
+    result.push({
+      time:    timeOut,
+      lat:     lat,
+      lng:     lng,
+      address: address
+    });
+  }
+  return result;
 }

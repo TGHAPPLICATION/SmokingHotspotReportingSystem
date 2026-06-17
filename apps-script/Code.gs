@@ -27,14 +27,6 @@ function doGet(e) {
     return getReportsJson(e);
   }
 
-  // 地圖儀表板
-  if (e && e.parameter && e.parameter.page === 'dashboard') {
-    return HtmlService
-      .createHtmlOutputFromFile('Dashboard')
-      .setTitle('吸菸熱點地圖儀表板')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  }
-
   // ETL 管理頁
   if (e && e.parameter && e.parameter.page === 'etl') {
     return HtmlService
@@ -211,7 +203,7 @@ function buildJsonResponse(obj, statusCode) {
   return output;
 }
 
-// ── 儀表板資料 API ────────────────────────────────────────────
+// ── 儀表板資料 API（供 ETL 結果查詢）────────────────────────
 
 var ETL_TARGET_SS_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
 

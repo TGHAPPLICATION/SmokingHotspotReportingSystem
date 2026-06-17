@@ -181,6 +181,9 @@
   .slot-band.dimmed { opacity: .35; }
   .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
+  .slot-band.no-time { pointer-events: none; opacity: .3; cursor: not-allowed; }
+  .no-time-hint { font-size: .6rem; color: #484f58; margin-top: 5px; display: none; line-height: 1.4; }
+  .no-time-hint.visible { display: block; }
 
   /* ── Header 圖層面板 ── */
   .header-layers {
@@ -474,6 +477,7 @@
       <div class="slot-band active" data-band="2"><div class="band-dot" style="background:#facc15"></div><span>10–16 時</span><span class="band-count" id="bc-2"></span></div>
       <div class="slot-band active" data-band="3"><div class="band-dot" style="background:#f87171"></div><span>16–24 時</span><span class="band-count" id="bc-3"></span></div>
     </div>
+    <div class="no-time-hint" id="no-time-hint">此圖層無時間資料</div>
 
   </div>
 
@@ -812,9 +816,15 @@ function initLayers() {
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
-  // 地圖移動/縮放時重算群組
-  map.on('moveend', updateClusters);
-  map.on('zoomend', updateClusters);
+  // 地圖移動/縮放時重算群組（SmokingReports + sheet layers）
+  function updateAllClusters() {
+    updateClusters();
+    sheetLayers.forEach(function(layer) {
+      if (layer.visible && layer.loaded && viewMode === 'cluster') updateSheetLayerClusters(layer);
+    });
+  }
+  map.on('moveend', updateAllClusters);
+  map.on('zoomend', updateAllClusters);
 }
 
 function esc(s) {
@@ -830,6 +840,7 @@ var LAYER_VIS = {
 
 function setViewMode(mode) {
   viewMode = mode;
+  // ── SmokingReports 圖層
   var vis = LAYER_VIS[mode] || LAYER_VIS.hidden;
   Object.keys(vis).forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
@@ -840,15 +851,22 @@ function setViewMode(mode) {
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
   if (mode === 'cluster') updateClusters();
+
+  // ── 同步套用到所有可見的 sheet layers
+  sheetLayers.forEach(function(layer) {
+    if (!layer.visible || !layer.loaded) return;
+    setSheetLayerMode(layer, mode);
+    if (mode === 'cluster') updateSheetLayerClusters(layer);
+  });
 }
 
 function handleViewBtn(mode) {
-  // 再次點擊已選取的按鈕 → 隱藏所有回報點位
   if (viewMode === mode) {
     setViewMode('hidden');
   } else {
     setViewMode(mode);
   }
+  updateTimeFilterUI();
 }
 
 document.getElementById('btn-cluster').addEventListener('click', function() { handleViewBtn('cluster'); });
@@ -1388,9 +1406,77 @@ function gvizToPoints(table) {
 }
 
 function addSheetLayer(layer) {
+  var empty = { type: 'FeatureCollection', features: [] };
+
+  // ── 原始點 source（點位 + 熱力圖共用）
   if (!map.getSource(layer.sourceId)) {
-    map.addSource(layer.sourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addSource(layer.sourceId, { type: 'geojson', data: empty });
   }
+  // ── 分群 source（存放 supercluster 結果）
+  if (!map.getSource(layer.clusterSourceId)) {
+    map.addSource(layer.clusterSourceId, { type: 'geojson', data: empty });
+  }
+
+  // ── 熱力圖 layer
+  if (!map.getLayer(layer.heatLayerId)) {
+    map.addLayer({
+      id: layer.heatLayerId, type: 'heatmap', source: layer.sourceId,
+      layout: { visibility: 'none' },
+      paint: {
+        'heatmap-weight': 0.4,
+        'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 13, 1.5, 15, 3],
+        'heatmap-color': [
+          'interpolate', ['linear'], ['heatmap-density'],
+          0, 'rgba(0,0,0,0)',
+          0.2, layer.color + '88',
+          0.5, layer.color + 'bb',
+          1.0, layer.color
+        ],
+        'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 13, 14, 15, 24],
+        'heatmap-opacity': 0.8
+      }
+    });
+  }
+
+  // ── 分群光環 layer
+  if (!map.getLayer(layer.clusterGlowId)) {
+    map.addLayer({
+      id: layer.clusterGlowId, type: 'circle', source: layer.clusterSourceId,
+      filter: ['has', 'point_count'],
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-color': layer.color,
+        'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 22, 5, 34, 15, 48, 30, 62],
+        'circle-opacity': 0.15, 'circle-blur': 0.65, 'circle-stroke-width': 0
+      }
+    });
+  }
+
+  // ── 分群主圓 layer
+  if (!map.getLayer(layer.clusterLayerId)) {
+    map.addLayer({
+      id: layer.clusterLayerId, type: 'circle', source: layer.clusterSourceId,
+      filter: ['has', 'point_count'],
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-color': layer.color,
+        'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 14, 5, 22, 15, 32, 30, 42],
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(255,255,255,.65)'
+      }
+    });
+    map.on('click', layer.clusterLayerId, function(e) {
+      if (!layer.sc) return;
+      var f = map.queryRenderedFeatures(e.point, { layers: [layer.clusterLayerId] })[0];
+      if (!f) return;
+      var zoom = layer.sc.getClusterExpansionZoom(f.properties.cluster_id);
+      map.easeTo({ center: f.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
+    });
+    map.on('mouseenter', layer.clusterLayerId, function() { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', layer.clusterLayerId, function() { map.getCanvas().style.cursor = ''; });
+  }
+
+  // ── 點位 layer（分群展開後的散點 + points 模式共用）
   if (!map.getLayer(layer.layerId)) {
     map.addLayer({
       id: layer.layerId, type: 'circle', source: layer.sourceId,
@@ -1427,15 +1513,32 @@ function loadSheetLayerData(layer) {
     try {
       if (resp.status !== 'ok') throw new Error(resp.status);
       var features = gvizToPoints(resp.table);
+      layer.features = features;
+      layer.loaded   = true;
+      layer.hasTime  = hasTimeData(features);
+
+      // 建立 per-layer supercluster
+      try {
+        layer.sc = new Supercluster({ radius: 50, maxZoom: 15 });
+        layer.sc.load(features);
+      } catch(_) { layer.sc = null; }
+
+      // 寫入原始點 source（點位 + 熱力圖）
       if (map.getSource(layer.sourceId)) {
         map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: features });
       }
-      layer.loaded = true;
+
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
-      if (layer.visible && map.getLayer(layer.layerId)) {
-        map.setLayoutProperty(layer.layerId, 'visibility', 'visible');
+
+      // 依目前視圖模式顯示
+      if (layer.visible) {
+        setSheetLayerMode(layer, viewMode);
+        if (viewMode === 'cluster') updateSheetLayerClusters(layer);
       }
+
+      // 更新時段按鈕狀態
+      updateTimeFilterUI();
     } catch(e) {
       console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);
     }
@@ -1461,15 +1564,79 @@ function createSheetLayerButton(layer) {
   btn.addEventListener('click', function() {
     layer.visible = !layer.visible;
     btn.classList.toggle('active', layer.visible);
-    // 確保圖層已加入地圖（時序問題：Sheets API async 回應時地圖可能尚未完全就緒）
-    addSheetLayer(layer);
+    addSheetLayer(layer);  // 確保圖層已加入地圖
     if (layer.visible && !layer.loaded) {
-      loadSheetLayerData(layer);
-    } else if (map.getLayer(layer.layerId)) {
-      map.setLayoutProperty(layer.layerId, 'visibility', layer.visible ? 'visible' : 'none');
+      loadSheetLayerData(layer);  // 載入後回呼會自動套用視圖模式
+    } else {
+      setSheetLayerMode(layer, layer.visible ? viewMode : 'hidden');
+      if (layer.visible && viewMode === 'cluster') updateSheetLayerClusters(layer);
     }
+    updateTimeFilterUI();
   });
   document.getElementById('header-layers').appendChild(btn);
+}
+
+// ── Sheet layer 輔助函式 ─────────────────────────────────────
+
+/** 依 mode 設定單一 sheet layer 的所有子圖層可見性 */
+function setSheetLayerMode(layer, mode) {
+  var h = mode === 'heatmap' ? 'visible' : 'none';
+  var c = mode === 'cluster' ? 'visible' : 'none';
+  var p = mode === 'points'  ? 'visible' : 'none';
+  if (map.getLayer(layer.heatLayerId))    map.setLayoutProperty(layer.heatLayerId,    'visibility', h);
+  if (map.getLayer(layer.clusterGlowId))  map.setLayoutProperty(layer.clusterGlowId,  'visibility', c);
+  if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', c);
+  if (map.getLayer(layer.layerId))        map.setLayoutProperty(layer.layerId,        'visibility', p);
+}
+
+/** 更新單一 sheet layer 的 supercluster 結果 */
+function updateSheetLayerClusters(layer) {
+  if (!layer.sc || !map.getSource(layer.clusterSourceId)) return;
+  var bounds = map.getBounds();
+  var zoom = Math.floor(map.getZoom());
+  var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+  var clusters = layer.sc.getClusters(bbox, zoom);
+  clusters.forEach(function(f) {
+    if (f.properties.point_count) f.properties.point_count_label = abbrev(f.properties.point_count);
+  });
+  map.getSource(layer.clusterSourceId).setData({ type: 'FeatureCollection', features: clusters });
+}
+
+/** 判斷 features 是否含有時間欄位 */
+function hasTimeData(features) {
+  if (!features || !features.length) return false;
+  return features.some(function(f) {
+    var props = f.properties || {};
+    return Object.keys(props).some(function(k) {
+      var v = props[k];
+      if (!v) return false;
+      var s = String(v).trim();
+      // 符合日期格式或 ISO 字串
+      return /^\d{4}[\/\-]\d{2}[\/\-]\d{2}/.test(s) ||
+             (!isNaN(Date.parse(s)) && s.length > 8);
+    });
+  });
+}
+
+/** 依可見圖層的時間資料狀況，更新時段按鈕啟用／禁用 */
+function updateTimeFilterUI() {
+  // SmokingReports 主圖層（viewMode !== 'hidden'）本身有 time_slot
+  var mainLayerVisible = (viewMode !== 'hidden');
+  var visibleSheetWithTime = sheetLayers.some(function(l) {
+    return l.visible && l.loaded && l.hasTime;
+  });
+  var visibleSheetNoTime = sheetLayers.some(function(l) {
+    return l.visible && l.loaded && !l.hasTime;
+  });
+  var hasTime = mainLayerVisible || visibleSheetWithTime;
+
+  document.querySelectorAll('.slot-band').forEach(function(el) {
+    el.classList.toggle('no-time', !hasTime);
+  });
+  var hint = document.getElementById('no-time-hint');
+  // 只在有可見 sheet layer 且無時間資料，且主圖層也隱藏時才顯示提示
+  var showHint = !hasTime && visibleSheetNoTime;
+  hint.classList.toggle('visible', showHint);
 }
 
 // 將分頁名稱清單轉為地圖圖層 + 按鈕
@@ -1482,8 +1649,14 @@ function applySheetNames(names) {
     var sn = layerSafeName(name);
     var layer = {
       name: name, safeName: sn, color: color,
-      sourceId: 'source-' + sn, layerId: 'layer-' + sn,
-      visible: false, loaded: false
+      sourceId:        'src-pt-' + sn,
+      clusterSourceId: 'src-cl-' + sn,
+      layerId:         'lyr-pt-' + sn,
+      heatLayerId:     'lyr-ht-' + sn,
+      clusterGlowId:   'lyr-cg-' + sn,
+      clusterLayerId:  'lyr-cl-' + sn,
+      visible: false, loaded: false,
+      features: [], sc: null, hasTime: false
     };
     sheetLayers.push(layer);
     if (map.isStyleLoaded()) addSheetLayer(layer);

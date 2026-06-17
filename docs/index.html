@@ -316,8 +316,11 @@
     <h1>台北市吸菸熱點地圖</h1>
     <span class="header-sub">即時通報</span>
   </div>
-  <!-- 圖層切換列（合法吸菸區 + 動態分頁） -->
+  <!-- 圖層切換列（SmokingReports + 合法吸菸區 + 動態分頁） -->
   <div class="header-layers" id="header-layers">
+    <button class="layer-btn" id="smoking-reports-btn" style="--lc:#e74c3c" title="即時通報資料">
+      <span class="layer-dot"></span>即時通報<span class="layer-count" id="smoking-reports-count"></span>
+    </button>
     <button class="layer-btn" id="zone-toggle-btn" style="--lc:#27ae60" title="顯示／隱藏合法吸菸區">
       <span class="layer-dot"></span>合法吸菸區<span class="layer-count" id="zone-count"></span>
     </button>
@@ -583,9 +586,12 @@ map = new maplibregl.Map({
 map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
+var smokingReportsVisible = false;   // 由按鈕控制，預設不顯示
+var smokingReportsDataLoaded = false; // 是否已載入過資料
+
 map.on('load', function() {
   try { initLayers(); } catch(e) { console.error('[initLayers] FAILED:', e); }
-  loadData();
+  // SmokingReports 不再自動載入，等使用者點擊按鈕後才載入
 });
 
 function initLayers() {
@@ -840,17 +846,19 @@ var LAYER_VIS = {
 
 function setViewMode(mode) {
   viewMode = mode;
-  // ── SmokingReports 圖層
-  var vis = LAYER_VIS[mode] || LAYER_VIS.hidden;
-  Object.keys(vis).forEach(function(id) {
-    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
+
+  // ── SmokingReports 圖層：只在按鈕已選取時才套用
+  var srVis = smokingReportsVisible ? (LAYER_VIS[mode] || LAYER_VIS.hidden) : LAYER_VIS.hidden;
+  Object.keys(srVis).forEach(function(id) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', srVis[id]);
   });
+
   document.querySelectorAll('.view-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.id === 'btn-' + mode);
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
-  if (mode === 'cluster') updateClusters();
+  if (smokingReportsVisible && mode === 'cluster') updateClusters();
 
   // ── 同步套用到所有可見的 sheet layers
   sheetLayers.forEach(function(layer) {
@@ -861,11 +869,8 @@ function setViewMode(mode) {
 }
 
 function handleViewBtn(mode) {
-  if (viewMode === mode) {
-    setViewMode('hidden');
-  } else {
-    setViewMode(mode);
-  }
+  // 視圖按鈕只切換顯示方式，不控制各圖層的開關
+  setViewMode(mode);
   updateTimeFilterUI();
 }
 
@@ -1051,10 +1056,25 @@ function updateSlotBandUI() {
 
 function applyData(features) {
   allFeatures = features;
+  smokingReportsDataLoaded = true;
+
+  // 更新按鈕筆數標籤
+  var countEl = document.getElementById('smoking-reports-count');
+  if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 筆' : '';
+
   initMonthSlider();
   updateSlotBandUI();
-  applyFilter();
+  applyFilter(); // 更新 source 資料，不影響可見性
+
+  // 依目前視圖模式套用圖層可見性（SmokingReports 已開啟才顯示）
+  var vis = smokingReportsVisible ? (LAYER_VIS[viewMode] || LAYER_VIS.hidden) : LAYER_VIS.hidden;
+  Object.keys(vis).forEach(function(id) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
+  });
+  if (smokingReportsVisible && viewMode === 'cluster') updateClusters();
+
   document.getElementById('loading').classList.add('hidden');
+  updateTimeFilterUI();
 }
 
 // gviz 回應解析：將 Google Visualization table 轉為 GeoJSON features
@@ -1355,6 +1375,25 @@ function setSmokingZoneVisibility(visible) {
   document.getElementById('zone-toggle-btn').classList.toggle('active', visible);
 }
 
+// ── SmokingReports 按鈕 ──────────────────────────────────────
+document.getElementById('smoking-reports-btn').addEventListener('click', function() {
+  smokingReportsVisible = !smokingReportsVisible;
+  this.classList.toggle('active', smokingReportsVisible);
+
+  if (smokingReportsVisible && !smokingReportsDataLoaded) {
+    // 首次開啟：載入資料（applyData 裡會套用圖層可見性）
+    loadData();
+  } else {
+    // 切換可見性
+    var vis = smokingReportsVisible ? (LAYER_VIS[viewMode] || LAYER_VIS.hidden) : LAYER_VIS.hidden;
+    Object.keys(vis).forEach(function(id) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
+    });
+    if (smokingReportsVisible && viewMode === 'cluster') updateClusters();
+  }
+  updateTimeFilterUI();
+});
+
 document.getElementById('zone-toggle-btn').addEventListener('click', function() {
   smokingZoneVisible = !smokingZoneVisible;
   setSmokingZoneVisibility(smokingZoneVisible);
@@ -1649,15 +1688,14 @@ function hasTimeData(features) {
 
 /** 依可見圖層的時間資料狀況，更新時段按鈕啟用／禁用 */
 function updateTimeFilterUI() {
-  // SmokingReports 主圖層（viewMode !== 'hidden'）本身有 time_slot
-  var mainLayerVisible = (viewMode !== 'hidden');
+  // SmokingReports 本身有 time_slot，只要按鈕開啟就算有時間資料
   var visibleSheetWithTime = sheetLayers.some(function(l) {
     return l.visible && l.loaded && l.hasTime;
   });
   var visibleSheetNoTime = sheetLayers.some(function(l) {
     return l.visible && l.loaded && !l.hasTime;
   });
-  var hasTime = mainLayerVisible || visibleSheetWithTime;
+  var hasTime = smokingReportsVisible || visibleSheetWithTime;
 
   document.querySelectorAll('.slot-band').forEach(function(el) {
     el.classList.toggle('no-time', !hasTime);

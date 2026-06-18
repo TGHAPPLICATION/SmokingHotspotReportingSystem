@@ -1442,15 +1442,27 @@ function layerSafeName(str) {
   return 'sl_' + str.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
+// 解析 GViz 日期格式 "Date(year,month,day,h,m,s)" 及一般 ISO 字串
+function parseGvizDate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  var s = String(v).trim();
+  var m = s.match(/^Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)$/);
+  if (m) return new Date(+m[1], +m[2], +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  if (s.length > 8) { var d = new Date(s); if (!isNaN(d)) return d; }
+  return null;
+}
+
 // 從 gviz table 擷取座標，支援多種欄位名稱與自動偵測
 function gvizToPoints(table) {
   var cols = (table.cols || []).map(function(c) { return (c.label || c.id || '').toLowerCase(); });
-  var latIdx = -1, lngIdx = -1;
+  var latIdx = -1, lngIdx = -1, timeIdx = -1;
   var LAT_KEYS = ['lat','latitude','緯度','y座標','座標y','wgs84緯度','座標-wgs84-y'];
   var LNG_KEYS = ['lng','longitude','經度','x座標','座標x','wgs84經度','座標-wgs84-x'];
+  var TIME_KEYS = ['time','時間','datetime','日期時間','date','日期','timestamp'];
   cols.forEach(function(c, i) {
     if (latIdx < 0 && LAT_KEYS.indexOf(c) >= 0) latIdx = i;
     if (lngIdx < 0 && LNG_KEYS.indexOf(c) >= 0) lngIdx = i;
+    if (timeIdx < 0 && TIME_KEYS.indexOf(c) >= 0) timeIdx = i;
   });
 
   var features = [];
@@ -1461,7 +1473,6 @@ function gvizToPoints(table) {
       lat = parseFloat(c[latIdx] && c[latIdx].v);
       lng = parseFloat(c[lngIdx] && c[lngIdx].v);
     } else {
-      // 自動掃描台北座標範圍
       c.forEach(function(cell) {
         if (!cell || cell.v === null) return;
         var v = parseFloat(cell.v);
@@ -1473,6 +1484,27 @@ function gvizToPoints(table) {
     if (isNaN(lat) || isNaN(lng)) return;
     var props = {};
     (table.cols || []).forEach(function(col, i) { props[col.label || col.id] = c[i] ? c[i].v : null; });
+
+    // 解析時間欄位：優先用 timeIdx，否則掃描所有欄位找日期值
+    var timeDate = null;
+    if (timeIdx >= 0 && c[timeIdx]) {
+      timeDate = parseGvizDate(c[timeIdx].v);
+    }
+    if (!timeDate) {
+      // 找第一個可解析為有時間的日期欄位（排除純日期 00:00:00）
+      for (var i = 0; i < c.length; i++) {
+        if (!c[i]) continue;
+        var d = parseGvizDate(c[i].v);
+        if (d) { timeDate = d; break; }
+      }
+    }
+    if (timeDate) {
+      // 統一轉為 ISO 字串，讓 hasTimeData 可以偵測
+      var key = timeIdx >= 0 ? (table.cols[timeIdx].label || table.cols[timeIdx].id) : '__time';
+      props[key] = timeDate.toISOString();
+      props.time_slot = Math.floor(timeDate.getHours() / 2);
+    }
+
     features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: props });
   });
   return features;
@@ -1614,11 +1646,6 @@ function loadSheetLayerData(layer) {
     try {
       if (resp.status !== 'ok') throw new Error(resp.status);
       var features = gvizToPoints(resp.table);
-      // 從 time 欄位計算 time_slot（0-11），供時段篩選使用
-      features.forEach(function(f) {
-        var t = f.properties && (f.properties.time || f.properties.Time || f.properties.TIME);
-        if (t) { var d = new Date(t); if (!isNaN(d)) f.properties.time_slot = Math.floor(d.getHours() / 2); }
-      });
       layer.features = features;
       layer.loaded   = true;
       layer.hasTime  = hasTimeData(features);
@@ -1711,17 +1738,19 @@ function updateSheetLayerClusters(layer) {
   map.getSource(layer.clusterSourceId).setData({ type: 'FeatureCollection', features: clusters });
 }
 
-/** 判斷 features 是否含有時間欄位 */
+/** 判斷 features 是否含有時間欄位（包含 time_slot 或可解析日期） */
 function hasTimeData(features) {
   if (!features || !features.length) return false;
   return features.some(function(f) {
     var props = f.properties || {};
+    // 已有 time_slot 表示已處理過
+    if (props.time_slot !== undefined && props.time_slot !== null) return true;
     return Object.keys(props).some(function(k) {
       var v = props[k];
       if (!v) return false;
       var s = String(v).trim();
-      // 符合日期格式或 ISO 字串
       return /^\d{4}[\/\-]\d{2}[\/\-]\d{2}/.test(s) ||
+             /^Date\(\d+,\d+,\d+/.test(s) ||
              (!isNaN(Date.parse(s)) && s.length > 8);
     });
   });

@@ -638,9 +638,9 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-color': '#e74c3c',
       'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 22, 5, 34, 15, 48, 30, 62],
-      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.12, 5, 0.15, 15, 0.18, 30, 0.22],
+      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.08, 5, 0.12, 15, 0.16, 30, 0.20],
       'circle-blur': 0.65, 'circle-stroke-width': 0
     }
   });
@@ -651,9 +651,9 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-color': '#e74c3c',
       'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 14, 5, 22, 15, 32, 30, 42],
-      'circle-opacity': 0.92,
+      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.45, 5, 0.62, 15, 0.80, 30, 1.0],
       'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(255,255,255,.65)'
     }
   });
@@ -675,10 +675,7 @@ function initLayers() {
     layout: { visibility: 'visible' },
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 5, 18, 12],
-      'circle-color': [
-        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
-        '#60a5fa', 2, '#34d399', 5, '#facc15', 8, '#f87171'
-      ],
+      'circle-color': '#e74c3c',
       'circle-opacity': 0.9, 'circle-stroke-width': 1.5,
       'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.8
     }
@@ -699,13 +696,7 @@ function initLayers() {
     layout: { visibility: 'none' },
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 11],
-      'circle-color': [
-        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
-        '#60a5fa',  // slot 0–1  (00–04 時)
-        2,  '#34d399',  // slot 2–4  (04–10 時)
-        5,  '#facc15',  // slot 5–7  (10–16 時)
-        8,  '#f87171'   // slot 8–11 (16–24 時)
-      ],
+      'circle-color': '#e74c3c',
       'circle-opacity': 0.85, 'circle-stroke-width': 0
     }
   });

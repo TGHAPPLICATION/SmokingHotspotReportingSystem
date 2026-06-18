@@ -124,7 +124,7 @@
   /* 圖例 */
   .panel-legend { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
   .legend-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
-  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: .68rem; color: #8b949e; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: .68rem; color: #8b949e; }
   .legend-row:last-child { margin-bottom: 0; }
   .legend-swatch {
     border-radius: 50%; flex-shrink: 0;
@@ -132,6 +132,12 @@
     display: flex; align-items: center; justify-content: center;
     font-size: .5rem; font-weight: 700; color: #fff;
   }
+  /* 分群圖例：用同色系深淺 + 大小表示群組規模 */
+  .cluster-sz { border: none; border-radius: 50%; background: var(--cluster-color, #e74c3c); flex-shrink: 0; }
+  .cluster-sz-s  { width: 10px; height: 10px; opacity: .45; }
+  .cluster-sz-m  { width: 15px; height: 15px; opacity: .62; }
+  .cluster-sz-l  { width: 20px; height: 20px; opacity: .80; }
+  .cluster-sz-xl { width: 26px; height: 26px; opacity: 1.00; }
   .panel-legend.hidden { display: none; }
 
   /* 月份滑桿 */
@@ -171,19 +177,22 @@
   .slot-filter-clear:hover { color: #8b949e; }
   .slot-band {
     display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
-    font-size: .68rem; color: #8b949e; cursor: pointer;
-    padding: 2px 4px; border-radius: 4px; user-select: none;
-    transition: background .15s;
+    font-size: .7rem; color: #6e7681; cursor: pointer;
+    padding: 3px 4px; border-radius: 4px; user-select: none;
+    transition: background .15s, color .15s;
   }
   .slot-band:last-child { margin-bottom: 0; }
-  .slot-band:hover { background: rgba(255,255,255,.06); }
-  .slot-band.active { color: #e6edf3; background: rgba(255,255,255,.1); }
+  .slot-band:hover { background: rgba(255,255,255,.06); color: #c0ccd8; }
+  .slot-band.active { color: #fff; background: rgba(255,255,255,.08); }
   .slot-band.dimmed { opacity: .35; }
-  .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
+  .slot-band .band-count { margin-left: auto; font-size: .65rem; color: #8b949e; }
+  .slot-band.active .band-count { color: #c0ccd8; }
   .slot-band.no-time { pointer-events: none; opacity: .3; cursor: not-allowed; }
   .no-time-hint { font-size: .6rem; color: #484f58; margin-top: 5px; display: none; line-height: 1.4; }
   .no-time-hint.visible { display: block; }
+  /* 僅對即時通報有效果的控制區：未選取時淡化 */
+  .sr-only-section { transition: opacity .25s; }
+  .sr-only-section.sr-disabled { opacity: .28; pointer-events: none; }
 
   /* ── Header 圖層面板 ── */
   .header-layers {
@@ -432,25 +441,17 @@
       <button class="view-btn" id="btn-points"><span class="vicon">⚪</span>點位</button>
     </div>
 
-    <!-- 圖例（分群模式）-->
-    <div class="panel-legend" id="legend-cluster">
+    <!-- 圖例（分群模式）— 顏色對應圖層色，大小/深淺代表群組規模 -->
+    <div class="panel-legend sr-only-section" id="legend-cluster">
       <div class="legend-title">群組大小</div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#2ecc71; width:13px; height:13px;"></div><span>1–4 筆</span>
-      </div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#f1c40f; width:17px; height:17px;">5</div><span>5–14 筆</span>
-      </div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#e67e22; width:21px; height:21px;">15</div><span>15–29 筆</span>
-      </div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#e74c3c; width:25px; height:25px;">30</div><span>30 筆以上</span>
-      </div>
+      <div class="legend-row"><div class="cluster-sz cluster-sz-s"></div><span>1–4 筆</span></div>
+      <div class="legend-row"><div class="cluster-sz cluster-sz-m"></div><span>5–14 筆</span></div>
+      <div class="legend-row"><div class="cluster-sz cluster-sz-l"></div><span>15–29 筆</span></div>
+      <div class="legend-row"><div class="cluster-sz cluster-sz-xl"></div><span>30 筆以上</span></div>
     </div>
 
     <!-- 圖例（點位模式）-->
-    <div class="panel-legend hidden" id="legend-points">
+    <div class="panel-legend hidden sr-only-section" id="legend-points">
       <div class="legend-title">點位色階</div>
       <div class="legend-row"><div class="legend-swatch" style="background:#60a5fa; width:11px; height:11px;"></div><span>00–04 時</span></div>
       <div class="legend-row"><div class="legend-swatch" style="background:#34d399; width:11px; height:11px;"></div><span>04–10 時</span></div>
@@ -458,8 +459,8 @@
       <div class="legend-row"><div class="legend-swatch" style="background:#f87171; width:11px; height:11px;"></div><span>16–24 時</span></div>
     </div>
 
-    <!-- 月份滑桿 -->
-    <div class="month-filter" id="month-filter">
+    <!-- 月份滑桿（僅即時通報有效） -->
+    <div class="month-filter sr-only-section" id="month-filter">
       <div class="month-filter-title">月份篩選</div>
       <div class="month-label" id="month-label">全部時間</div>
       <div class="month-slider-wrap">
@@ -472,13 +473,13 @@
       </div>
     </div>
 
-    <!-- 時段篩選（所有模式共用）-->
-    <div class="slot-filter" id="slot-filter">
+    <!-- 時段篩選（僅即時通報有效） -->
+    <div class="slot-filter sr-only-section" id="slot-filter">
       <div class="slot-filter-title">通報時段 <span class="slot-filter-clear" id="slot-clear">全選</span></div>
-      <div class="slot-band active" data-band="0"><div class="band-dot" style="background:#60a5fa"></div><span>00–04 時</span><span class="band-count" id="bc-0"></span></div>
-      <div class="slot-band active" data-band="1"><div class="band-dot" style="background:#34d399"></div><span>04–10 時</span><span class="band-count" id="bc-1"></span></div>
-      <div class="slot-band active" data-band="2"><div class="band-dot" style="background:#facc15"></div><span>10–16 時</span><span class="band-count" id="bc-2"></span></div>
-      <div class="slot-band active" data-band="3"><div class="band-dot" style="background:#f87171"></div><span>16–24 時</span><span class="band-count" id="bc-3"></span></div>
+      <div class="slot-band active" data-band="0"><span>00–04 時</span><span class="band-count" id="bc-0"></span></div>
+      <div class="slot-band active" data-band="1"><span>04–10 時</span><span class="band-count" id="bc-1"></span></div>
+      <div class="slot-band active" data-band="2"><span>10–16 時</span><span class="band-count" id="bc-2"></span></div>
+      <div class="slot-band active" data-band="3"><span>16–24 時</span><span class="band-count" id="bc-3"></span></div>
     </div>
     <div class="no-time-hint" id="no-time-hint">此圖層無時間資料</div>
 
@@ -591,7 +592,9 @@ var smokingReportsDataLoaded = false; // 是否已載入過資料
 
 map.on('load', function() {
   try { initLayers(); } catch(e) { console.error('[initLayers] FAILED:', e); }
-  // SmokingReports 不再自動載入，等使用者點擊按鈕後才載入
+  // SmokingReports 不再自動載入；初始化控制區淡化狀態
+  document.getElementById('legend-cluster').style.setProperty('--cluster-color', '#e74c3c');
+  updateSrOnlySections();
 });
 
 function initLayers() {
@@ -1375,10 +1378,21 @@ function setSmokingZoneVisibility(visible) {
   document.getElementById('zone-toggle-btn').classList.toggle('active', visible);
 }
 
+/** 依 smokingReportsVisible 更新「僅即時通報有效」的控制區啟用狀態 */
+function updateSrOnlySections() {
+  var disabled = !smokingReportsVisible;
+  document.querySelectorAll('.sr-only-section').forEach(function(el) {
+    el.classList.toggle('sr-disabled', disabled);
+  });
+}
+
 // ── SmokingReports 按鈕 ──────────────────────────────────────
 document.getElementById('smoking-reports-btn').addEventListener('click', function() {
   smokingReportsVisible = !smokingReportsVisible;
   this.classList.toggle('active', smokingReportsVisible);
+  // 更新分群圖例的圖層顏色（SmokingReports = #e74c3c）
+  document.getElementById('legend-cluster').style.setProperty('--cluster-color', '#e74c3c');
+  updateSrOnlySections();
 
   if (smokingReportsVisible && !smokingReportsDataLoaded) {
     // 首次開啟：載入資料（applyData 裡會套用圖層可見性）

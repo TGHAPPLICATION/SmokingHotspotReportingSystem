@@ -1017,15 +1017,38 @@ document.getElementById('month-all').addEventListener('click', function() {
   applyFilter();
 });
 
+function getSheetLayerFilteredFeatures(layer) {
+  if (!layer.hasTime) return layer.features;
+  var allowedSlots = new Set();
+  activeBands.forEach(function(b) {
+    SLOT_BANDS[b].slots.forEach(function(s) { allowedSlots.add(s); });
+  });
+  if (allowedSlots.size === 12) return layer.features;
+  return layer.features.filter(function(f) {
+    return allowedSlots.has(parseInt(f.properties.time_slot));
+  });
+}
+
 function applyFilter() {
+  // SmokingReports
   var filtered = getFilteredFeatures();
   var fc = { type: 'FeatureCollection', features: filtered };
-  // 重建 supercluster（cluster 模式用）
   buildSupercluster(filtered);
   updateClusters();
-  // reports-heat 直接放全部原始點（heatmap / points 模式用）
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);
+  // Sheet layers
+  sheetLayers.forEach(function(layer) {
+    if (!layer.visible || !layer.loaded) return;
+    var sf = getSheetLayerFilteredFeatures(layer);
+    if (map.getSource(layer.sourceId)) {
+      map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: sf });
+    }
+    if (layer.sc) {
+      try { layer.sc = new Supercluster({ radius: 50, maxZoom: 15 }); layer.sc.load(sf); } catch(_) {}
+      updateSheetLayerClusters(layer);
+    }
+  });
 }
 
 function updateSlotBandUI() {
@@ -1369,20 +1392,26 @@ function setSmokingZoneVisibility(visible) {
   document.getElementById('zone-toggle-btn').classList.toggle('active', visible);
 }
 
-/** 依 smokingReportsVisible 更新「僅即時通報有效」的控制區啟用狀態 */
+/** 依可見圖層狀態更新控制區啟用狀態，並同步群組圖例顏色 */
 function updateSrOnlySections() {
-  var disabled = !smokingReportsVisible;
+  var anyVisible = smokingReportsVisible ||
+    sheetLayers.some(function(l) { return l.visible && l.loaded; });
   document.querySelectorAll('.sr-only-section').forEach(function(el) {
-    el.classList.toggle('sr-disabled', disabled);
+    el.classList.toggle('sr-disabled', !anyVisible);
   });
+  // 群組圖例顏色：優先 SmokingReports，其次第一個可見 sheet layer
+  var color = '#e74c3c';
+  if (!smokingReportsVisible) {
+    var first = sheetLayers.find(function(l) { return l.visible && l.loaded; });
+    if (first) color = first.color;
+  }
+  document.getElementById('legend-cluster').style.setProperty('--cluster-color', color);
 }
 
 // ── SmokingReports 按鈕 ──────────────────────────────────────
 document.getElementById('smoking-reports-btn').addEventListener('click', function() {
   smokingReportsVisible = !smokingReportsVisible;
   this.classList.toggle('active', smokingReportsVisible);
-  // 更新分群圖例的圖層顏色（SmokingReports = #e74c3c）
-  document.getElementById('legend-cluster').style.setProperty('--cluster-color', '#e74c3c');
   updateSrOnlySections();
 
   if (smokingReportsVisible && !smokingReportsDataLoaded) {
@@ -1585,6 +1614,11 @@ function loadSheetLayerData(layer) {
     try {
       if (resp.status !== 'ok') throw new Error(resp.status);
       var features = gvizToPoints(resp.table);
+      // 從 time 欄位計算 time_slot（0-11），供時段篩選使用
+      features.forEach(function(f) {
+        var t = f.properties && (f.properties.time || f.properties.Time || f.properties.TIME);
+        if (t) { var d = new Date(t); if (!isNaN(d)) f.properties.time_slot = Math.floor(d.getHours() / 2); }
+      });
       layer.features = features;
       layer.loaded   = true;
       layer.hasTime  = hasTimeData(features);
@@ -1609,8 +1643,9 @@ function loadSheetLayerData(layer) {
         if (viewMode === 'cluster') updateSheetLayerClusters(layer);
       }
 
-      // 更新時段按鈕狀態
+      // 更新時段按鈕狀態與控制區
       updateTimeFilterUI();
+      updateSrOnlySections();
     } catch(e) {
       console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);
     }
@@ -1644,6 +1679,7 @@ function createSheetLayerButton(layer) {
       if (layer.visible && viewMode === 'cluster') updateSheetLayerClusters(layer);
     }
     updateTimeFilterUI();
+    updateSrOnlySections();
   });
   document.getElementById('header-layers').appendChild(btn);
 }

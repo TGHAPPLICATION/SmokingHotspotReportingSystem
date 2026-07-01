@@ -316,6 +316,9 @@
   </div>
   <!-- 圖層切換列（合法吸菸區 + 動態分頁） -->
   <div class="header-layers" id="header-layers">
+    <button class="layer-btn active" id="report-layer-btn" style="--lc:#e74c3c" title="顯示／隱藏即時通報資料">
+      <span class="layer-dot"></span>即時通報<span class="layer-count" id="report-layer-count"></span>
+    </button>
     <button class="layer-btn" id="zone-toggle-btn" style="--lc:#27ae60" title="顯示／隱藏合法吸菸區">
       <span class="layer-dot"></span>合法吸菸區<span class="layer-count" id="zone-count"></span>
     </button>
@@ -509,6 +512,7 @@ var SLOT_COLORS = [
 ];
 
 var clusterBaseColor = '#e74c3c';
+var reportLayerVisible = true;
 var allFeatures = [];
 var viewMode = 'cluster';
 var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
@@ -858,12 +862,25 @@ function setViewMode(mode) {
   Object.keys(vis).forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
   });
+  // 分頁圖層：分群模式合併進 supercluster（隱藏個別圖層），其他模式正常顯示
+  sheetLayers.forEach(function(l) {
+    if (!map.getLayer(l.layerId)) return;
+    if (mode === 'cluster') {
+      map.setLayoutProperty(l.layerId, 'visibility', 'none');
+    } else {
+      map.setLayoutProperty(l.layerId, 'visibility', l.visible ? 'visible' : 'none');
+    }
+  });
   document.querySelectorAll('.view-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.id === 'btn-' + mode);
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
-  if (mode !== 'cluster') clearClusterMarkers();
+  if (mode === 'cluster') {
+    updateClusterData();
+  } else {
+    clearClusterMarkers();
+  }
 }
 
 function handleViewBtn(mode) {
@@ -1024,12 +1041,23 @@ document.getElementById('month-all').addEventListener('click', function() {
   applyFilter();
 });
 
+// 合併所有作用中圖層的點位，重建 supercluster
+function updateClusterData() {
+  var features = [];
+  if (reportLayerVisible) features = features.concat(getFilteredFeatures());
+  sheetLayers.forEach(function(l) {
+    if (l.visible && l.features && l.features.length) {
+      features = features.concat(l.features);
+    }
+  });
+  buildSupercluster(features);
+  updateClusters();
+}
+
 function applyFilter() {
   var filtered = getFilteredFeatures();
-  var fc = { type: 'FeatureCollection', features: filtered };
-  buildSupercluster(filtered);
-  updateClusters();
-  // reports-heat 直接放全部原始點（heatmap / points 模式用）
+  var fc = { type: 'FeatureCollection', features: reportLayerVisible ? filtered : [] };
+  updateClusterData();
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);
 }
@@ -1060,6 +1088,8 @@ function applyData(features) {
   updateSlotBandUI();
   applyFilter();
   document.getElementById('loading').classList.add('hidden');
+  var countEl = document.getElementById('report-layer-count');
+  if (countEl && allFeatures.length > 0) countEl.textContent = ' ' + allFeatures.length.toLocaleString() + ' 筆';
 }
 
 // gviz 回應解析：將 Google Visualization table 轉為 GeoJSON features
@@ -1360,6 +1390,23 @@ function setSmokingZoneVisibility(visible) {
   document.getElementById('zone-toggle-btn').classList.toggle('active', visible);
 }
 
+document.getElementById('report-layer-btn').addEventListener('click', function() {
+  reportLayerVisible = !reportLayerVisible;
+  this.classList.toggle('active', reportLayerVisible);
+  updateClusterData();
+  var filtered = reportLayerVisible ? getFilteredFeatures() : [];
+  var fc = { type: 'FeatureCollection', features: filtered };
+  if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
+  if (viewMode !== 'cluster') {
+    var rawVis = reportLayerVisible ? 'visible' : 'none';
+    if (map.getLayer('layer-halo-raw')) map.setLayoutProperty('layer-halo-raw', 'visibility', rawVis);
+    if (map.getLayer('layer-points-raw')) map.setLayoutProperty('layer-points-raw', 'visibility', rawVis);
+    if (map.getLayer('layer-halo')) map.setLayoutProperty('layer-halo', 'visibility', rawVis);
+    if (map.getLayer('layer-points')) map.setLayoutProperty('layer-points', 'visibility', rawVis);
+  }
+  updateStats(filtered);
+});
+
 document.getElementById('zone-toggle-btn').addEventListener('click', function() {
   smokingZoneVisible = !smokingZoneVisible;
   setSmokingZoneVisibility(smokingZoneVisible);
@@ -1450,14 +1497,24 @@ function loadSheetLayerData(layer) {
     try {
       if (resp.status !== 'ok') throw new Error(resp.status);
       var features = gvizToPoints(resp.table);
+      layer.features = features;
       if (map.getSource(layer.sourceId)) {
-        map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: features });
+        // 在非分群模式下才用獨立圖層顯示點位；分群模式由 supercluster 合併
+        if (viewMode !== 'cluster') {
+          map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: features });
+        }
       }
       layer.loaded = true;
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
-      if (layer.visible && map.getLayer(layer.layerId)) {
-        map.setLayoutProperty(layer.layerId, 'visibility', 'visible');
+      if (layer.visible) {
+        if (viewMode === 'cluster') {
+          // 在分群模式下合併進 supercluster，不顯示個別圖層
+          if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
+          updateClusterData();
+        } else if (map.getLayer(layer.layerId)) {
+          map.setLayoutProperty(layer.layerId, 'visibility', 'visible');
+        }
       }
     } catch(e) {
       console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);
@@ -1484,13 +1541,24 @@ function createSheetLayerButton(layer) {
   btn.addEventListener('click', function() {
     layer.visible = !layer.visible;
     btn.classList.toggle('active', layer.visible);
-    // 確保圖層已加入地圖（時序問題：Sheets API async 回應時地圖可能尚未完全就緒）
     addSheetLayer(layer);
-    if (layer.visible && !layer.loaded) {
-      loadSheetLayerData(layer);
-    } else if (map.getLayer(layer.layerId)) {
-      map.setLayoutProperty(layer.layerId, 'visibility', layer.visible ? 'visible' : 'none');
+    if (viewMode === 'cluster') {
+      // 分群模式：合併資料重建 supercluster，不顯示個別圖層
+      if (layer.visible && !layer.loaded) {
+        loadSheetLayerData(layer); // 載入後會自動呼叫 updateClusterData
+      } else {
+        if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
+        updateClusterData();
+      }
+    } else {
+      // 非分群模式：正常切換個別圖層可見性
+      if (layer.visible && !layer.loaded) {
+        loadSheetLayerData(layer);
+      } else if (map.getLayer(layer.layerId)) {
+        map.setLayoutProperty(layer.layerId, 'visibility', layer.visible ? 'visible' : 'none');
+      }
     }
+    // 更新分群顏色
     if (layer.visible) {
       setClusterColor(layer.color);
     } else {

@@ -533,8 +533,7 @@ function updateClusterLabels() {
   clearClusterMarkers();
   if (viewMode !== 'cluster') return;
   var features = map.queryRenderedFeatures({ layers: ['layer-clusters'] });
-  console.log('[cluster-labels] queryRenderedFeatures layer-clusters =', features.length,
-    '| reports source data count =', (map.getSource('reports')._data && map.getSource('reports')._data.features ? map.getSource('reports')._data.features.length : 'N/A'));
+  console.log('[cluster-labels] features=' + features.length + ' viewMode=' + viewMode);
   features.forEach(function(f) {
     var count = f.properties.point_count;
     if (!count) return;
@@ -814,8 +813,8 @@ function initLayers() {
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
-  // 地圖渲染完成後更新 cluster 數字標籤
-  map.on('idle', updateClusterLabels);
+  map.on('moveend', updateClusterLabels);
+  map.on('zoomend', updateClusterLabels);
 }
 
 function esc(s) {
@@ -1005,7 +1004,10 @@ function applyFilter() {
   var filtered = getFilteredFeatures();
   var fc = { type: 'FeatureCollection', features: filtered };
   // reports source：含 cluster:true，MapLibre 自動分群，直接傳入原始點位
-  if (map.getSource('reports')) map.getSource('reports').setData(fc);
+  if (map.getSource('reports')) {
+    map.getSource('reports').setData(fc);
+    setTimeout(updateClusterLabels, 400);
+  }
   // reports-heat 直接放全部原始點（heatmap / points 模式用）
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);

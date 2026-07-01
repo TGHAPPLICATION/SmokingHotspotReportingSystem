@@ -430,18 +430,10 @@
     <!-- 圖例（分群模式）-->
     <div class="panel-legend" id="legend-cluster">
       <div class="legend-title">群組大小</div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#2ecc71; width:13px; height:13px;"></div><span>1–4 筆</span>
-      </div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#f1c40f; width:17px; height:17px;">5</div><span>5–14 筆</span>
-      </div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#e67e22; width:21px; height:21px;">15</div><span>15–29 筆</span>
-      </div>
-      <div class="legend-row">
-        <div class="legend-swatch" style="background:#e74c3c; width:25px; height:25px;">30</div><span>30 筆以上</span>
-      </div>
+      <div class="legend-row"><div class="legend-swatch cluster-swatch" style="background:#e74c3c;opacity:0.38;width:13px;height:13px;"></div><span>1–4 筆</span></div>
+      <div class="legend-row"><div class="legend-swatch cluster-swatch" style="background:#e74c3c;opacity:0.58;width:17px;height:17px;"></div><span>5–14 筆</span></div>
+      <div class="legend-row"><div class="legend-swatch cluster-swatch" style="background:#e74c3c;opacity:0.78;width:21px;height:21px;"></div><span>15–29 筆</span></div>
+      <div class="legend-row"><div class="legend-swatch cluster-swatch" style="background:#e74c3c;opacity:0.94;width:25px;height:25px;"></div><span>30 筆以上</span></div>
     </div>
 
     <!-- 圖例（點位模式）-->
@@ -516,6 +508,7 @@ var SLOT_COLORS = [
   '#ef4444','#dc2626','#7c3aed','#2563eb'
 ];
 
+var clusterBaseColor = '#e74c3c';
 var allFeatures = [];
 var viewMode = 'cluster';
 var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
@@ -525,6 +518,19 @@ var map;
 var sc = null;
 var smokingZoneVisible = false;
 var smokingZoneLoaded = false;
+
+function setClusterColor(color) {
+  clusterBaseColor = color;
+  if (map && map.getLayer('layer-cluster-glow')) {
+    map.setPaintProperty('layer-cluster-glow', 'circle-color', color);
+  }
+  if (map && map.getLayer('layer-clusters')) {
+    map.setPaintProperty('layer-clusters', 'circle-color', color);
+  }
+  document.querySelectorAll('.cluster-swatch').forEach(function(el) {
+    el.style.background = color;
+  });
+}
 
 function buildSupercluster(features) {
   try {
@@ -642,9 +648,9 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-color': '#e74c3c',
       'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 22, 5, 34, 15, 48, 30, 62],
-      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.12, 5, 0.15, 15, 0.18, 30, 0.22],
+      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.06, 5, 0.10, 15, 0.15, 30, 0.22],
       'circle-blur': 0.65, 'circle-stroke-width': 0
     }
   });
@@ -655,9 +661,9 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: { visibility: 'visible' },
     paint: {
-      'circle-color': ['step', ['coalesce', ['get', 'point_count'], 0], '#2ecc71', 5, '#f1c40f', 15, '#e67e22', 30, '#e74c3c'],
+      'circle-color': '#e74c3c',
       'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 14, 5, 22, 15, 32, 30, 42],
-      'circle-opacity': 0.92,
+      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.38, 5, 0.58, 15, 0.78, 30, 0.94],
       'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(255,255,255,.65)'
     }
   });
@@ -1484,6 +1490,12 @@ function createSheetLayerButton(layer) {
       loadSheetLayerData(layer);
     } else if (map.getLayer(layer.layerId)) {
       map.setLayoutProperty(layer.layerId, 'visibility', layer.visible ? 'visible' : 'none');
+    }
+    if (layer.visible) {
+      setClusterColor(layer.color);
+    } else {
+      var anyVisible = sheetLayers.some(function(l) { return l.visible; });
+      if (!anyVisible) setClusterColor('#e74c3c');
     }
   });
   document.getElementById('header-layers').appendChild(btn);

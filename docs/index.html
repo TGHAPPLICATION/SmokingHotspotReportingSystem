@@ -207,13 +207,13 @@
 
   /* ── 分群數字標籤 ── */
   .cluster-label {
-    color: #fff; font-size: 12px; font-weight: 700;
+    color: #fff; font-size: 13px; font-weight: 800;
     pointer-events: none;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.55);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.7);
     white-space: nowrap; line-height: 1;
+    position: relative; z-index: 10;
+    display: block;
   }
-  /* 讓 maplibre marker wrapper 不干擾點擊 */
-  .cluster-label-wrap .maplibregl-marker { pointer-events: none; }
 
   /* ── 右側圖示按鈕 ── */
   .right-btns {
@@ -564,10 +564,10 @@ function updateClusters() {
     var zoom = Math.floor(map.getZoom());
     var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
     var clusters = sc.getClusters(bbox, zoom);
+    var markerCount = 0;
     clusters.forEach(function(f) {
       if (f.properties.point_count) {
         f.properties.point_count_label = abbrev(f.properties.point_count);
-        // HTML marker 顯示數字（不依賴 MapLibre 字型）
         var el = document.createElement('div');
         el.className = 'cluster-label';
         el.textContent = f.properties.point_count_label;
@@ -575,10 +575,11 @@ function updateClusters() {
           .setLngLat(f.geometry.coordinates)
           .addTo(map);
         _clusterMarkers.push(marker);
+        markerCount++;
       }
     });
     map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
-    console.log('[cluster] updateClusters zoom=' + zoom + ' clusters=' + clusters.length);
+    console.log('[cluster] updateClusters zoom=' + zoom + ' total=' + clusters.length + ' markers=' + markerCount);
   } catch(e) {
     console.error('[cluster] updateClusters failed', e);
   }

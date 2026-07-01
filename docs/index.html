@@ -651,16 +651,16 @@ function initLayers() {
     filter: ['has', 'point_count'],
     layout: {
       visibility: 'visible',
-      'text-field': ['get', 'point_count_label'],
-      'text-font': ['Noto Sans Bold', 'Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-field': ['coalesce', ['get', 'point_count_label'], ['to-string', ['get', 'point_count']], ''],
+      'text-font': ['Noto Sans Regular', 'Arial Unicode MS Regular'],
       'text-size': ['step', ['coalesce', ['get', 'point_count'], 0], 11, 5, 13, 15, 15, 30, 17],
       'text-allow-overlap': true,
       'text-ignore-placement': true
     },
     paint: {
       'text-color': '#ffffff',
-      'text-halo-color': 'rgba(0,0,0,0.25)',
-      'text-halo-width': 1
+      'text-halo-color': 'rgba(0,0,0,0.3)',
+      'text-halo-width': 1.5
     }
   });
 

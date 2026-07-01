@@ -205,6 +205,16 @@
   .layer-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lc, #2ecc71); flex-shrink: 0; }
   .layer-count { font-size: .62rem; color: #484f58; font-weight: 400; margin-left: 1px; }
 
+  /* ── 分群數字標籤 ── */
+  .cluster-label {
+    color: #fff; font-size: 12px; font-weight: 700;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.55);
+    white-space: nowrap; line-height: 1;
+  }
+  /* 讓 maplibre marker wrapper 不干擾點擊 */
+  .cluster-label-wrap .maplibregl-marker { pointer-events: none; }
+
   /* ── 右側圖示按鈕 ── */
   .right-btns {
     position: absolute; top: 10px; right: 10px;
@@ -523,6 +533,7 @@ var map;
 var sc = null; // supercluster 實例
 var smokingZoneVisible = false;
 var smokingZoneLoaded = false;
+var _clusterMarkers = []; // HTML markers for cluster count labels
 
 function buildSupercluster(features) {
   try {
@@ -539,18 +550,31 @@ function abbrev(n) {
   return n >= 1000 ? Math.floor(n / 1000) + 'k' : String(n);
 }
 
+function clearClusterMarkers() {
+  _clusterMarkers.forEach(function(m) { m.remove(); });
+  _clusterMarkers = [];
+}
+
 function updateClusters() {
   if (!sc || !map || !map.getSource('reports')) return;
+  clearClusterMarkers();
   if (viewMode !== 'cluster') return;
   try {
     var bounds = map.getBounds();
     var zoom = Math.floor(map.getZoom());
     var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
     var clusters = sc.getClusters(bbox, zoom);
-    // 預先寫入 label 字串，避免在 MapLibre expression 裡做複雜運算
     clusters.forEach(function(f) {
       if (f.properties.point_count) {
         f.properties.point_count_label = abbrev(f.properties.point_count);
+        // HTML marker 顯示數字（不依賴 MapLibre 字型）
+        var el = document.createElement('div');
+        el.className = 'cluster-label';
+        el.textContent = f.properties.point_count_label;
+        var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+          .setLngLat(f.geometry.coordinates)
+          .addTo(map);
+        _clusterMarkers.push(marker);
       }
     });
     map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
@@ -645,24 +669,6 @@ function initLayers() {
     }
   });
 
-  // 分群數字標籤
-  map.addLayer({
-    id: 'layer-cluster-count', type: 'symbol', source: 'reports',
-    filter: ['has', 'point_count'],
-    layout: {
-      visibility: 'visible',
-      'text-field': ['coalesce', ['get', 'point_count_label'], ['to-string', ['get', 'point_count']]],
-      'text-font': ['literal', ['Noto Sans Regular', 'Arial Unicode MS Regular']],
-      'text-size': 13,
-      'text-allow-overlap': true,
-      'text-ignore-placement': true
-    },
-    paint: {
-      'text-color': '#ffffff',
-      'text-halo-color': 'rgba(0,0,0,0.3)',
-      'text-halo-width': 1.5
-    }
-  });
 
 （reports source，filter: !has point_count）
   map.addLayer({
@@ -841,10 +847,10 @@ function esc(s) {
 }
 
 var LAYER_VIS = {
-  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-cluster-count': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
-  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
-  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' },
-  hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-count': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
+  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' },
+  hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
 };
 
 function setViewMode(mode) {
@@ -858,7 +864,11 @@ function setViewMode(mode) {
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
-  if (mode === 'cluster') updateClusters();
+  if (mode === 'cluster') {
+    updateClusters();
+  } else {
+    clearClusterMarkers();
+  }
 }
 
 function handleViewBtn(mode) {

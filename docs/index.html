@@ -543,14 +543,30 @@ function buildSupercluster(features) {
   } catch(e) { sc = null; }
 }
 
+function buildSheetSupercluster(layer) {
+  try {
+    layer.sc = new Supercluster({ radius: 50, maxZoom: 15 });
+    layer.sc.load(layer.features || []);
+  } catch(e) { layer.sc = null; }
+}
+
 function updateClusters() {
-  if (!sc || !map || !map.getSource('reports')) return;
+  if (!map) return;
   if (viewMode !== 'cluster') return;
   var bounds = map.getBounds();
   var zoom = Math.floor(map.getZoom());
   var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-  var clusters = sc.getClusters(bbox, zoom);
-  map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
+  // 即時通報
+  if (sc && map.getSource('reports')) {
+    var clusters = sc.getClusters(bbox, zoom);
+    map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
+  }
+  // 各 sheet layer 獨立分群
+  sheetLayers.forEach(function(l) {
+    if (!l.visible || !l.sc || !map.getSource(l.clusterSourceId)) return;
+    var cs = l.sc.getClusters(bbox, zoom);
+    map.getSource(l.clusterSourceId).setData({ type: 'FeatureCollection', features: cs });
+  });
   setTimeout(updateClusterLabels, 350);
 }
 var _clusterMarkers = [];
@@ -561,10 +577,11 @@ function clearClusterMarkers() {
 }
 
 function updateClusterLabels() {
-  console.log('[cluster-labels] called viewMode=' + viewMode);
   clearClusterMarkers();
   if (viewMode !== 'cluster') return;
-  var features = map.queryRenderedFeatures({ layers: ['layer-clusters'] });
+  var layerIds = ['layer-clusters'];
+  sheetLayers.forEach(function(l) { if (l.visible && l.clusterLayerId && map.getLayer(l.clusterLayerId)) layerIds.push(l.clusterLayerId); });
+  var features = map.queryRenderedFeatures({ layers: layerIds });
   console.log('[cluster-labels] features=' + features.length);
   features.forEach(function(f) {
     var count = f.properties.point_count;
@@ -862,14 +879,16 @@ function setViewMode(mode) {
   Object.keys(vis).forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
   });
-  // 分頁圖層：分群模式合併進 supercluster（隱藏個別圖層），其他模式正常顯示
+  // 分頁圖層：分群模式顯示各自 cluster layer，其他模式顯示個別點位圖層
   sheetLayers.forEach(function(l) {
-    if (!map.getLayer(l.layerId)) return;
-    if (mode === 'cluster') {
-      map.setLayoutProperty(l.layerId, 'visibility', 'none');
-    } else {
-      map.setLayoutProperty(l.layerId, 'visibility', l.visible ? 'visible' : 'none');
-    }
+    var isCluster = (mode === 'cluster');
+    var dotVis = (!isCluster && l.visible) ? 'visible' : 'none';
+    var clVis  = (isCluster && l.visible)  ? 'visible' : 'none';
+    if (map.getLayer(l.layerId)) map.setLayoutProperty(l.layerId, 'visibility', dotVis);
+    if (map.getLayer(l.clusterGlowId)) map.setLayoutProperty(l.clusterGlowId, 'visibility', clVis);
+    if (map.getLayer(l.clusterLayerId)) map.setLayoutProperty(l.clusterLayerId, 'visibility', clVis);
+    // 切換到分群模式時若尚未建立 sc，補建
+    if (isCluster && l.visible && l.loaded && !l.sc) buildSheetSupercluster(l);
   });
   document.querySelectorAll('.view-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.id === 'btn-' + mode);
@@ -877,9 +896,16 @@ function setViewMode(mode) {
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
   if (mode === 'cluster') {
-    updateClusterData();
+    updateClusterData(); // 即時通報的 sc
+    updateClusters();   // sheet layers 的 sc（已在 setViewMode 內建好）
   } else {
     clearClusterMarkers();
+    // 非分群模式：確保 sheet layer 個別點位 source 有資料
+    sheetLayers.forEach(function(l) {
+      if (l.visible && l.loaded && map.getSource(l.sourceId)) {
+        map.getSource(l.sourceId).setData({ type: 'FeatureCollection', features: l.features || [] });
+      }
+    });
   }
 }
 
@@ -1041,15 +1067,9 @@ document.getElementById('month-all').addEventListener('click', function() {
   applyFilter();
 });
 
-// 合併所有作用中圖層的點位，重建 supercluster
+// 重建即時通報 supercluster（sheet layers 各自維護自己的 sc）
 function updateClusterData() {
-  var features = [];
-  if (reportLayerVisible) features = features.concat(getFilteredFeatures());
-  sheetLayers.forEach(function(l) {
-    if (l.visible && l.features && l.features.length) {
-      features = features.concat(l.features);
-    }
-  });
+  var features = reportLayerVisible ? getFilteredFeatures() : [];
   buildSupercluster(features);
   updateClusters();
 }
@@ -1458,6 +1478,7 @@ function gvizToPoints(table) {
 }
 
 function addSheetLayer(layer) {
+  // 個別點位圖層（用於點位模式）
   if (!map.getSource(layer.sourceId)) {
     map.addSource(layer.sourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   }
@@ -1486,6 +1507,45 @@ function addSheetLayer(layer) {
     map.on('mouseenter', layer.layerId, function() { map.getCanvas().style.cursor = 'pointer'; });
     map.on('mouseleave', layer.layerId, function() { map.getCanvas().style.cursor = ''; });
   }
+  // 獨立分群圖層（分群模式專用，各自顏色）
+  if (!map.getSource(layer.clusterSourceId)) {
+    map.addSource(layer.clusterSourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  }
+  if (!map.getLayer(layer.clusterGlowId)) {
+    map.addLayer({
+      id: layer.clusterGlowId, type: 'circle', source: layer.clusterSourceId,
+      filter: ['has', 'point_count'],
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-color': layer.color,
+        'circle-radius': ['step', ['get', 'point_count'], 24, 5, 32, 15, 42, 30, 52],
+        'circle-opacity': ['step', ['get', 'point_count'], 0.06, 5, 0.10, 15, 0.15, 30, 0.22],
+        'circle-blur': 0.6
+      }
+    });
+  }
+  if (!map.getLayer(layer.clusterLayerId)) {
+    map.addLayer({
+      id: layer.clusterLayerId, type: 'circle', source: layer.clusterSourceId,
+      filter: ['has', 'point_count'],
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-color': layer.color,
+        'circle-radius': ['step', ['get', 'point_count'], 14, 5, 20, 15, 26, 30, 32],
+        'circle-opacity': ['step', ['get', 'point_count'], 0.38, 5, 0.58, 15, 0.78, 30, 0.94],
+        'circle-stroke-width': 1.5, 'circle-stroke-color': layer.color, 'circle-stroke-opacity': 0.4
+      }
+    });
+    map.on('click', layer.clusterLayerId, function(e) {
+      var feature = map.queryRenderedFeatures(e.point, { layers: [layer.clusterLayerId] })[0];
+      if (!feature || !layer.sc) return;
+      var clusterId = feature.properties.cluster_id;
+      var zoom = layer.sc.getClusterExpansionZoom(clusterId);
+      map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
+    });
+    map.on('mouseenter', layer.clusterLayerId, function() { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', layer.clusterLayerId, function() { map.getCanvas().style.cursor = ''; });
+  }
 }
 
 function loadSheetLayerData(layer) {
@@ -1498,22 +1558,22 @@ function loadSheetLayerData(layer) {
       if (resp.status !== 'ok') throw new Error(resp.status);
       var features = gvizToPoints(resp.table);
       layer.features = features;
-      if (map.getSource(layer.sourceId)) {
-        // 在非分群模式下才用獨立圖層顯示點位；分群模式由 supercluster 合併
-        if (viewMode !== 'cluster') {
-          map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: features });
-        }
-      }
       layer.loaded = true;
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
       if (layer.visible) {
         if (viewMode === 'cluster') {
-          // 在分群模式下合併進 supercluster，不顯示個別圖層
+          // 建立該圖層自己的 supercluster，更新 cluster source
+          buildSheetSupercluster(layer);
           if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
-          updateClusterData();
-        } else if (map.getLayer(layer.layerId)) {
-          map.setLayoutProperty(layer.layerId, 'visibility', 'visible');
+          if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
+          if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
+          updateClusters();
+        } else {
+          if (map.getSource(layer.sourceId)) {
+            map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: features });
+          }
+          if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'visible');
         }
       }
     } catch(e) {
@@ -1543,15 +1603,23 @@ function createSheetLayerButton(layer) {
     btn.classList.toggle('active', layer.visible);
     addSheetLayer(layer);
     if (viewMode === 'cluster') {
-      // 分群模式：合併資料重建 supercluster，不顯示個別圖層
-      if (layer.visible && !layer.loaded) {
-        loadSheetLayerData(layer); // 載入後會自動呼叫 updateClusterData
+      if (layer.visible) {
+        if (!layer.loaded) {
+          loadSheetLayerData(layer); // 載入後自動建立 sc 並顯示
+        } else {
+          if (!layer.sc) buildSheetSupercluster(layer);
+          if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
+          if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
+          if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
+          updateClusters();
+        }
       } else {
         if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
-        updateClusterData();
+        if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'none');
+        if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'none');
+        updateClusterLabels();
       }
     } else {
-      // 非分群模式：正常切換個別圖層可見性
       if (layer.visible && !layer.loaded) {
         loadSheetLayerData(layer);
       } else if (map.getLayer(layer.layerId)) {
@@ -1573,7 +1641,10 @@ function applySheetNames(names) {
     var layer = {
       name: name, safeName: sn, color: color,
       sourceId: 'source-' + sn, layerId: 'layer-' + sn,
-      visible: false, loaded: false
+      clusterSourceId: 'source-cl-' + sn,
+      clusterGlowId: 'layer-cl-glow-' + sn,
+      clusterLayerId: 'layer-cl-' + sn,
+      sc: null, visible: false, loaded: false
     };
     sheetLayers.push(layer);
     if (map.isStyleLoaded()) addSheetLayer(layer);

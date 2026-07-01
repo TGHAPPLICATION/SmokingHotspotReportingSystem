@@ -490,7 +490,7 @@
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
-console.log('[HOTSPOT] v=' + new Date('2026-07-01T00:00:00Z').toISOString().slice(0,10));
+console.log('[HOTSPOT] cluster-labels-v4');
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
 var SMOKING_ZONE_API = './smoking-zones.json';
@@ -647,7 +647,7 @@ function initLayers() {
 
 
 
-（reports source，filter: !has point_count）
+  // reports source，filter: !has point_count
   map.addLayer({
     id: 'layer-halo', type: 'circle', source: 'reports',
     filter: ['!', ['has', 'point_count']],

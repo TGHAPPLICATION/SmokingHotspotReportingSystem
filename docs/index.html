@@ -1558,13 +1558,6 @@ function createSheetLayerButton(layer) {
         map.setLayoutProperty(layer.layerId, 'visibility', layer.visible ? 'visible' : 'none');
       }
     }
-    // 更新分群顏色
-    if (layer.visible) {
-      setClusterColor(layer.color);
-    } else {
-      var anyVisible = sheetLayers.some(function(l) { return l.visible; });
-      if (!anyVisible) setClusterColor('#e74c3c');
-    }
   });
   document.getElementById('header-layers').appendChild(btn);
 }

@@ -533,6 +533,8 @@ function updateClusterLabels() {
   clearClusterMarkers();
   if (viewMode !== 'cluster') return;
   var features = map.queryRenderedFeatures({ layers: ['layer-clusters'] });
+  console.log('[cluster-labels] queryRenderedFeatures layer-clusters =', features.length,
+    '| reports source data count =', (map.getSource('reports')._data && map.getSource('reports')._data.features ? map.getSource('reports')._data.features.length : 'N/A'));
   features.forEach(function(f) {
     var count = f.properties.point_count;
     if (!count) return;

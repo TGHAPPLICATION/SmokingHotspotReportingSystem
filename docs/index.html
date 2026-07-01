@@ -488,7 +488,6 @@
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
-<script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
@@ -521,39 +520,8 @@ var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
 var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
-var sc = null; // supercluster 實例
 var smokingZoneVisible = false;
 var smokingZoneLoaded = false;
-function buildSupercluster(features) {
-  try {
-    sc = new Supercluster({ radius: 50, maxZoom: 15 });
-    sc.load(features);
-    console.log('[cluster] supercluster loaded', features.length, 'features');
-  } catch(e) {
-    console.error('[cluster] buildSupercluster failed', e);
-    sc = null;
-  }
-}
-
-function abbrev(n) {
-  return n >= 1000 ? Math.floor(n / 1000) + 'k' : String(n);
-}
-
-function updateClusters() {
-  if (!sc || !map || !map.getSource('reports')) return;
-  if (viewMode !== 'cluster') return;
-  try {
-    var bounds = map.getBounds();
-    var zoom = Math.floor(map.getZoom());
-    var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-    var clusters = sc.getClusters(bbox, zoom);
-    map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
-    var clusterCount = clusters.filter(function(f) { return f.properties.point_count; }).length;
-    console.log('[cluster] zoom=' + zoom + ' total=' + clusters.length + ' clusters=' + clusterCount);
-  } catch(e) {
-    console.error('[cluster] updateClusters failed', e);
-  }
-}
 
 // 時段 band 對應的 time_slot 範圍（0–11 共 12 個 2 小時時段）
 var SLOT_BANDS = [
@@ -582,7 +550,10 @@ map.on('load', function() {
 function initLayers() {
   map.addSource('reports', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] }
+    data: { type: 'FeatureCollection', features: [] },
+    cluster: true,
+    clusterMaxZoom: 15,
+    clusterRadius: 50
   });
 
   map.addSource('reports-heat', {
@@ -640,22 +611,27 @@ function initLayers() {
     }
   });
 
-  // 分群數字標籤（symbol 圖層，直接從 reports source 讀取 point_count）
+  // 分群數字標籤（使用 MapLibre 原生 cluster 的 point_count_abbreviated）
+  // 字型從底圖 style 動態取得，確保與底圖一致
+  var styleFont = (map.getStyle().layers || [])
+    .filter(function(l) { return l.type === 'symbol' && l.layout && l.layout['text-font']; })
+    .map(function(l) { return l.layout['text-font']; })[0] || ['Noto Sans Bold', 'Noto Sans Regular'];
+
   map.addLayer({
     id: 'layer-cluster-labels', type: 'symbol', source: 'reports',
     filter: ['has', 'point_count'],
     layout: {
       visibility: 'visible',
-      'text-field': ['to-string', ['get', 'point_count']],
+      'text-field': ['get', 'point_count_abbreviated'],
       'text-size': 13,
-      'text-font': ['literal', ['Noto Sans Bold', 'Noto Sans Regular']],
+      'text-font': styleFont,
       'text-allow-overlap': true,
       'text-ignore-placement': true
     },
     paint: {
       'text-color': '#ffffff',
-      'text-halo-color': 'rgba(0,0,0,0.5)',
-      'text-halo-width': 1
+      'text-halo-color': 'rgba(0,0,0,0.6)',
+      'text-halo-width': 1.5
     }
   });
 
@@ -798,10 +774,11 @@ function initLayers() {
   // ── 互動事件 ──
   map.on('click', 'layer-clusters', function(e) {
     var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
-    if (!feature || !sc) return;
+    if (!feature) return;
     var clusterId = feature.properties.cluster_id;
-    var zoom = sc.getClusterExpansionZoom(clusterId);
-    map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
+    map.getSource('reports').getClusterExpansionZoom(clusterId).then(function(zoom) {
+      map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
+    });
   });
 
   function showPointPopup(e) {
@@ -827,9 +804,6 @@ function initLayers() {
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
-  // 地圖移動/縮放時重算群組
-  map.on('moveend', updateClusters);
-  map.on('zoomend', updateClusters);
 }
 
 function esc(s) {
@@ -854,7 +828,6 @@ function setViewMode(mode) {
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
-  if (mode === 'cluster') updateClusters();
 }
 
 function handleViewBtn(mode) {
@@ -1018,9 +991,8 @@ document.getElementById('month-all').addEventListener('click', function() {
 function applyFilter() {
   var filtered = getFilteredFeatures();
   var fc = { type: 'FeatureCollection', features: filtered };
-  // 重建 supercluster（cluster 模式用）
-  buildSupercluster(filtered);
-  updateClusters();
+  // reports source：含 cluster:true，MapLibre 自動分群，直接傳入原始點位
+  if (map.getSource('reports')) map.getSource('reports').setData(fc);
   // reports-heat 直接放全部原始點（heatmap / points 模式用）
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);

@@ -488,6 +488,7 @@
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 console.log('[HOTSPOT] cluster-labels-v4');
@@ -521,8 +522,27 @@ var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
 var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
+var sc = null;
 var smokingZoneVisible = false;
 var smokingZoneLoaded = false;
+
+function buildSupercluster(features) {
+  try {
+    sc = new Supercluster({ radius: 50, maxZoom: 15 });
+    sc.load(features);
+  } catch(e) { sc = null; }
+}
+
+function updateClusters() {
+  if (!sc || !map || !map.getSource('reports')) return;
+  if (viewMode !== 'cluster') return;
+  var bounds = map.getBounds();
+  var zoom = Math.floor(map.getZoom());
+  var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+  var clusters = sc.getClusters(bbox, zoom);
+  map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
+  setTimeout(updateClusterLabels, 350);
+}
 var _clusterMarkers = [];
 
 function clearClusterMarkers() {
@@ -584,10 +604,7 @@ map.on('load', function() {
 function initLayers() {
   map.addSource('reports', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-    cluster: true,
-    clusterMaxZoom: 15,
-    clusterRadius: 50
+    data: { type: 'FeatureCollection', features: [] }
   });
 
   map.addSource('reports-heat', {
@@ -785,11 +802,10 @@ function initLayers() {
   // ── 互動事件 ──
   map.on('click', 'layer-clusters', function(e) {
     var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
-    if (!feature) return;
+    if (!feature || !sc) return;
     var clusterId = feature.properties.cluster_id;
-    map.getSource('reports').getClusterExpansionZoom(clusterId).then(function(zoom) {
-      map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
-    });
+    var zoom = sc.getClusterExpansionZoom(clusterId);
+    map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
   });
 
   function showPointPopup(e) {
@@ -815,8 +831,8 @@ function initLayers() {
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
-  map.on('moveend', updateClusterLabels);
-  map.on('zoomend', updateClusterLabels);
+  map.on('moveend', updateClusters);
+  map.on('zoomend', updateClusters);
 }
 
 function esc(s) {
@@ -1005,11 +1021,8 @@ document.getElementById('month-all').addEventListener('click', function() {
 function applyFilter() {
   var filtered = getFilteredFeatures();
   var fc = { type: 'FeatureCollection', features: filtered };
-  // reports source：含 cluster:true，MapLibre 自動分群，直接傳入原始點位
-  if (map.getSource('reports')) {
-    map.getSource('reports').setData(fc);
-    setTimeout(updateClusterLabels, 400);
-  }
+  buildSupercluster(filtered);
+  updateClusters();
   // reports-heat 直接放全部原始點（heatmap / points 模式用）
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);

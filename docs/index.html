@@ -522,6 +522,37 @@ var map;
 
 var smokingZoneVisible = false;
 var smokingZoneLoaded = false;
+var _clusterMarkers = [];
+
+function clearClusterMarkers() {
+  _clusterMarkers.forEach(function(m) { m.remove(); });
+  _clusterMarkers = [];
+}
+
+function updateClusterLabels() {
+  clearClusterMarkers();
+  if (viewMode !== 'cluster') return;
+  var features = map.queryRenderedFeatures({ layers: ['layer-clusters'] });
+  features.forEach(function(f) {
+    var count = f.properties.point_count;
+    if (!count) return;
+    var label = count >= 1000 ? Math.floor(count / 1000) + 'k' : String(count);
+    var el = document.createElement('div');
+    el.textContent = label;
+    el.style.cssText = [
+      'color:#fff',
+      'font-size:13px',
+      'font-weight:800',
+      'pointer-events:none',
+      'white-space:nowrap',
+      'text-shadow:0 0 4px rgba(0,0,0,0.9),0 0 4px rgba(0,0,0,0.9)'
+    ].join(';');
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+      .setLngLat(f.geometry.coordinates)
+      .addTo(map);
+    _clusterMarkers.push(marker);
+  });
+}
 
 // 時段 band 對應的 time_slot 範圍（0–11 共 12 個 2 小時時段）
 var SLOT_BANDS = [
@@ -611,29 +642,6 @@ function initLayers() {
     }
   });
 
-  // 分群數字標籤（使用 MapLibre 原生 cluster 的 point_count_abbreviated）
-  // 字型從底圖 style 動態取得，確保與底圖一致
-  var styleFont = (map.getStyle().layers || [])
-    .filter(function(l) { return l.type === 'symbol' && l.layout && l.layout['text-font']; })
-    .map(function(l) { return l.layout['text-font']; })[0] || ['Noto Sans Bold', 'Noto Sans Regular'];
-
-  map.addLayer({
-    id: 'layer-cluster-labels', type: 'symbol', source: 'reports',
-    filter: ['has', 'point_count'],
-    layout: {
-      visibility: 'visible',
-      'text-field': ['get', 'point_count_abbreviated'],
-      'text-size': 13,
-      'text-font': styleFont,
-      'text-allow-overlap': true,
-      'text-ignore-placement': true
-    },
-    paint: {
-      'text-color': '#ffffff',
-      'text-halo-color': 'rgba(0,0,0,0.6)',
-      'text-halo-width': 1.5
-    }
-  });
 
 
 （reports source，filter: !has point_count）
@@ -804,6 +812,8 @@ function initLayers() {
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
+  // 地圖渲染完成後更新 cluster 數字標籤
+  map.on('idle', updateClusterLabels);
 }
 
 function esc(s) {
@@ -811,10 +821,10 @@ function esc(s) {
 }
 
 var LAYER_VIS = {
-  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-cluster-labels': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
-  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-labels': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
-  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-labels': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' },
-  hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-cluster-labels': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
+  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' },
+  hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
 };
 
 function setViewMode(mode) {
@@ -828,6 +838,7 @@ function setViewMode(mode) {
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
+  if (mode !== 'cluster') clearClusterMarkers();
 }
 
 function handleViewBtn(mode) {

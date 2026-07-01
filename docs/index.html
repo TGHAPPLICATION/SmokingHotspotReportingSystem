@@ -490,6 +490,7 @@
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
+console.log('[HOTSPOT] v=' + new Date('2026-07-01T00:00:00Z').toISOString().slice(0,10));
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
 var SMOKING_ZONE_API = './smoking-zones.json';
@@ -530,10 +531,11 @@ function clearClusterMarkers() {
 }
 
 function updateClusterLabels() {
+  console.log('[cluster-labels] called viewMode=' + viewMode);
   clearClusterMarkers();
   if (viewMode !== 'cluster') return;
   var features = map.queryRenderedFeatures({ layers: ['layer-clusters'] });
-  console.log('[cluster-labels] features=' + features.length + ' viewMode=' + viewMode);
+  console.log('[cluster-labels] features=' + features.length);
   features.forEach(function(f) {
     var count = f.properties.point_count;
     if (!count) return;

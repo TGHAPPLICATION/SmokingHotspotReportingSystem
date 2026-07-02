@@ -509,7 +509,7 @@ var SLOT_COLORS = [
 
 var clusterBaseColor = '#e74c3c';
 var allFeatures = [];
-var viewMode = 'cluster';
+var viewMode = 'hidden';
 var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
 var availableMonths = [];   // 排序後的月份字串陣列
 var map;
@@ -547,16 +547,15 @@ function buildSheetSupercluster(layer) {
 
 function updateClusters() {
   if (!map) return;
-  if (viewMode !== 'cluster') return;
   var bounds = map.getBounds();
   var zoom = Math.floor(map.getZoom());
   var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-  // 即時通報
-  if (sc && map.getSource('reports')) {
+  // 主資料管道（分群模式才顯示紅色圓圈）
+  if (viewMode === 'cluster' && sc && map.getSource('reports')) {
     var clusters = sc.getClusters(bbox, zoom);
     map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
   }
-  // 各 sheet layer 獨立分群
+  // 各分頁圖層獨立分群（與 viewMode 無關，由圖層按鈕自行控制）
   sheetLayers.forEach(function(l) {
     if (!l.visible || !l.sc || !map.getSource(l.clusterSourceId)) return;
     var cs = l.sc.getClusters(bbox, zoom);
@@ -573,9 +572,10 @@ function clearClusterMarkers() {
 
 function updateClusterLabels() {
   clearClusterMarkers();
-  if (viewMode !== 'cluster') return;
-  var layerIds = ['layer-clusters'];
+  var layerIds = [];
+  if (viewMode === 'cluster' && map.getLayer('layer-clusters')) layerIds.push('layer-clusters');
   sheetLayers.forEach(function(l) { if (l.visible && l.clusterLayerId && map.getLayer(l.clusterLayerId)) layerIds.push(l.clusterLayerId); });
+  if (!layerIds.length) return;
   var features = map.queryRenderedFeatures({ layers: layerIds });
   console.log('[cluster-labels] features=' + features.length);
   features.forEach(function(f) {
@@ -874,33 +874,17 @@ function setViewMode(mode) {
   Object.keys(vis).forEach(function(id) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis[id]);
   });
-  // 分頁圖層：分群模式顯示各自 cluster layer，其他模式顯示個別點位圖層
-  sheetLayers.forEach(function(l) {
-    var isCluster = (mode === 'cluster');
-    var dotVis = (!isCluster && l.visible) ? 'visible' : 'none';
-    var clVis  = (isCluster && l.visible)  ? 'visible' : 'none';
-    if (map.getLayer(l.layerId)) map.setLayoutProperty(l.layerId, 'visibility', dotVis);
-    if (map.getLayer(l.clusterGlowId)) map.setLayoutProperty(l.clusterGlowId, 'visibility', clVis);
-    if (map.getLayer(l.clusterLayerId)) map.setLayoutProperty(l.clusterLayerId, 'visibility', clVis);
-    // 切換到分群模式時若尚未建立 sc，補建
-    if (isCluster && l.visible && l.loaded && !l.sc) buildSheetSupercluster(l);
-  });
+  // 分頁圖層 cluster 層與 viewMode 無關，由圖層按鈕自行控制，此處不動
   document.querySelectorAll('.view-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.id === 'btn-' + mode);
   });
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
   if (mode === 'cluster') {
-    updateClusterData(); // 即時通報的 sc
-    updateClusters();   // sheet layers 的 sc（已在 setViewMode 內建好）
+    updateClusterData(); // 主資料管道 sc
+    updateClusters();
   } else {
     clearClusterMarkers();
-    // 非分群模式：確保 sheet layer 個別點位 source 有資料
-    sheetLayers.forEach(function(l) {
-      if (l.visible && l.loaded && map.getSource(l.sourceId)) {
-        map.getSource(l.sourceId).setData({ type: 'FeatureCollection', features: l.features || [] });
-      }
-    });
   }
 }
 
@@ -1536,19 +1520,12 @@ function loadSheetLayerData(layer) {
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
       if (layer.visible) {
-        if (viewMode === 'cluster') {
-          // 建立該圖層自己的 supercluster，更新 cluster source
-          buildSheetSupercluster(layer);
-          if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
-          if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
-          if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
-          updateClusters();
-        } else {
-          if (map.getSource(layer.sourceId)) {
-            map.getSource(layer.sourceId).setData({ type: 'FeatureCollection', features: features });
-          }
-          if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'visible');
-        }
+        // 分頁圖層一律以分群方式顯示，與主資料 viewMode 無關
+        buildSheetSupercluster(layer);
+        if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
+        if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
+        if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
+        updateClusters();
       }
     } catch(e) {
       console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);
@@ -1577,29 +1554,21 @@ function createSheetLayerButton(layer) {
     layer.visible = !layer.visible;
     btn.classList.toggle('active', layer.visible);
     addSheetLayer(layer);
-    if (viewMode === 'cluster') {
-      if (layer.visible) {
-        if (!layer.loaded) {
-          loadSheetLayerData(layer); // 載入後自動建立 sc 並顯示
-        } else {
-          if (!layer.sc) buildSheetSupercluster(layer);
-          if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
-          if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
-          if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
-          updateClusters();
-        }
+    if (layer.visible) {
+      if (!layer.loaded) {
+        loadSheetLayerData(layer);
       } else {
+        if (!layer.sc) buildSheetSupercluster(layer);
         if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
-        if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'none');
-        if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'none');
-        updateClusterLabels();
+        if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
+        if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
+        updateClusters();
       }
     } else {
-      if (layer.visible && !layer.loaded) {
-        loadSheetLayerData(layer);
-      } else if (map.getLayer(layer.layerId)) {
-        map.setLayoutProperty(layer.layerId, 'visibility', layer.visible ? 'visible' : 'none');
-      }
+      if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
+      if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'none');
+      if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'none');
+      updateClusterLabels();
     }
   });
   document.getElementById('header-layers').appendChild(btn);

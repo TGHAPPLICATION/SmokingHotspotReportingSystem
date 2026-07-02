@@ -1520,12 +1520,16 @@ function loadSheetLayerData(layer) {
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
       if (layer.visible) {
-        // 分頁圖層一律以分群方式顯示，與主資料 viewMode 無關
+        // 確保 map layer 存在（callback 觸發時可能尚未 addSheetLayer）
+        addSheetLayer(layer);
         buildSheetSupercluster(layer);
-        if (map.getLayer(layer.layerId)) map.setLayoutProperty(layer.layerId, 'visibility', 'none');
-        if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
-        if (map.getLayer(layer.clusterLayerId)) map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
+        console.log('[sheet-layer] ' + layer.name + ' parsed=' + features.length + ' sc=' + (layer.sc ? 'ok' : 'null'));
+        map.setLayoutProperty(layer.layerId, 'visibility', 'none');
+        map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
+        map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
         updateClusters();
+        // 延遲 retry 確保 MapLibre 完成渲染後再更新
+        setTimeout(updateClusters, 600);
       }
     } catch(e) {
       console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);
@@ -1631,12 +1635,19 @@ function loadSheetList() {
 // 地圖載入後初始化
 map.on('load', function() {
   loadSmokingZones();
-  // 在圖層初始化後將已知的 sheetLayers 加入地圖（通常為空，等 loadSheetList 回應後才有）
   sheetLayers.forEach(function(l) {
     addSheetLayer(l);
     if (l.visible && !l.loaded) loadSheetLayerData(l);
   });
   loadSheetList();
+  // 定期 retry 直到有 sheet layer 顯示（處理 gviz 非同步時序問題）
+  var retryCount = 0;
+  var retryTimer = setInterval(function() {
+    retryCount++;
+    var hasVisible = sheetLayers.some(function(l) { return l.visible && l.sc; });
+    if (hasVisible) { updateClusters(); }
+    if (retryCount >= 8) clearInterval(retryTimer); // 最多重試 8 次（約 4 秒）
+  }, 500);
 });
 </script>
 </body>

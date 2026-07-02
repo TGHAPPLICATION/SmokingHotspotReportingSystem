@@ -1520,16 +1520,23 @@ function loadSheetLayerData(layer) {
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
       if (layer.visible) {
-        // 確保 map layer 存在（callback 觸發時可能尚未 addSheetLayer）
-        addSheetLayer(layer);
         buildSheetSupercluster(layer);
-        console.log('[sheet-layer] ' + layer.name + ' parsed=' + features.length + ' sc=' + (layer.sc ? 'ok' : 'null'));
-        map.setLayoutProperty(layer.layerId, 'visibility', 'none');
-        map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
-        map.setLayoutProperty(layer.clusterLayerId, 'visibility', 'visible');
+        // 診斷 log：在 console 可確認資料與 layer 狀態
+        console.log('[sheet-layer] ' + layer.name +
+          ' parsed=' + features.length +
+          ' sc=' + (layer.sc ? 'ok' : 'null') +
+          ' glowExists=' + !!map.getLayer(layer.clusterGlowId) +
+          ' clExists='   + !!map.getLayer(layer.clusterLayerId));
+        // 確保 map layer 存在後再設定可見性
+        if (!map.getLayer(layer.clusterGlowId) || !map.getLayer(layer.clusterLayerId)) {
+          console.warn('[sheet-layer] cluster layers missing, re-adding: ' + layer.name);
+          addSheetLayer(layer);
+        }
+        if (map.getLayer(layer.layerId))       map.setLayoutProperty(layer.layerId,       'visibility', 'none');
+        if (map.getLayer(layer.clusterGlowId)) map.setLayoutProperty(layer.clusterGlowId, 'visibility', 'visible');
+        if (map.getLayer(layer.clusterLayerId))map.setLayoutProperty(layer.clusterLayerId,'visibility', 'visible');
         updateClusters();
-        // 延遲 retry 確保 MapLibre 完成渲染後再更新
-        setTimeout(updateClusters, 600);
+        setTimeout(updateClusters, 800);
       }
     } catch(e) {
       console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);

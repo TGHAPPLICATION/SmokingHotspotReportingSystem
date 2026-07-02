@@ -1568,7 +1568,7 @@ function loadSheetLayerData(layer) {
 
 function createSheetLayerButton(layer) {
   var btn = document.createElement('button');
-  btn.className = 'layer-btn';
+  btn.className = 'layer-btn' + (layer.visible ? ' active' : '');
   btn.style.setProperty('--lc', layer.color);
   btn.innerHTML = '<span class="layer-dot"></span>' + esc(layer.name) +
                   '<span class="layer-count" id="layer-count-' + layer.safeName + '"></span>';
@@ -1607,21 +1607,24 @@ function createSheetLayerButton(layer) {
 // 將分頁名稱清單轉為地圖圖層 + 按鈕
 function applySheetNames(names) {
   names.forEach(function(name) {
-    if (name === '測試資料') return;
     // 避免重複新增
     if (sheetLayers.some(function(l) { return l.name === name; })) return;
     var color = LAYER_PALETTE[sheetLayers.length % LAYER_PALETTE.length];
     var sn = layerSafeName(name);
+    var autoLoad = (name === '測試資料'); // 測試資料預設啟用並自動載入
     var layer = {
       name: name, safeName: sn, color: color,
       sourceId: 'source-' + sn, layerId: 'layer-' + sn,
       clusterSourceId: 'source-cl-' + sn,
       clusterGlowId: 'layer-cl-glow-' + sn,
       clusterLayerId: 'layer-cl-' + sn,
-      sc: null, visible: false, loaded: false
+      sc: null, visible: autoLoad, loaded: false
     };
     sheetLayers.push(layer);
-    if (map.isStyleLoaded()) addSheetLayer(layer);
+    if (map.isStyleLoaded()) {
+      addSheetLayer(layer);
+      if (autoLoad) loadSheetLayerData(layer);
+    }
     createSheetLayerButton(layer);
   });
 }
@@ -1652,7 +1655,10 @@ function loadSheetList() {
 map.on('load', function() {
   loadSmokingZones();
   // 在圖層初始化後將已知的 sheetLayers 加入地圖（通常為空，等 loadSheetList 回應後才有）
-  sheetLayers.forEach(function(l) { addSheetLayer(l); });
+  sheetLayers.forEach(function(l) {
+    addSheetLayer(l);
+    if (l.visible && !l.loaded) loadSheetLayerData(l);
+  });
   loadSheetList();
 });
 </script>

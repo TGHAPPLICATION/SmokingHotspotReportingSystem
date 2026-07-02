@@ -515,6 +515,7 @@ var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
 var sc = null;
+var mapLoaded = false;
 var smokingZoneVisible = false;
 var smokingZoneLoaded = false;
 
@@ -1602,7 +1603,7 @@ function applySheetNames(names) {
       sc: null, visible: false, loaded: false
     };
     sheetLayers.push(layer);
-    if (map.isStyleLoaded()) addSheetLayer(layer);
+    if (mapLoaded) addSheetLayer(layer);
     createSheetLayerButton(layer);
   });
   // 第一次取得分頁清單後，自動啟用第一個圖層
@@ -1610,7 +1611,7 @@ function applySheetNames(names) {
     var first = sheetLayers[0];
     first.visible = true;
     if (first._btn) first._btn.classList.add('active');
-    if (map.isStyleLoaded()) {
+    if (mapLoaded) {
       addSheetLayer(first);
       loadSheetLayerData(first);
     }
@@ -1641,6 +1642,7 @@ function loadSheetList() {
 
 // 地圖載入後初始化
 map.on('load', function() {
+  mapLoaded = true;
   loadSmokingZones();
   sheetLayers.forEach(function(l) {
     addSheetLayer(l);

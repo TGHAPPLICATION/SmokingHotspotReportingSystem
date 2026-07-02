@@ -509,7 +509,7 @@ var SLOT_COLORS = [
 
 var clusterBaseColor = '#e74c3c';
 var allFeatures = [];
-var viewMode = 'hidden';
+var viewMode = 'cluster';
 var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
 var availableMonths = [];   // 排序後的月份字串陣列
 var map;
@@ -875,7 +875,7 @@ function esc(s) {
 }
 
 var LAYER_VIS = {
-  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'visible', 'layer-clusters': 'visible', 'layer-halo': 'visible', 'layer-points': 'visible', 'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
+  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
   heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
   points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' },
   hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
@@ -1641,6 +1641,7 @@ function loadSheetList() {
 // 地圖載入後初始化
 map.on('load', function() {
   mapLoaded = true;
+  setViewMode('cluster'); // 預設分群模式，同步按鈕高亮
   loadSmokingZones();
   sheetLayers.forEach(function(l) {
     addSheetLayer(l);

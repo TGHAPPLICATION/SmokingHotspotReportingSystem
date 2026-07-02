@@ -312,13 +312,9 @@
   <div class="header-left">
     <div class="header-icon">🚭</div>
     <h1>台北市吸菸熱點地圖</h1>
-    <span class="header-sub">即時通報</span>
   </div>
-  <!-- 圖層切換列（合法吸菸區 + 動態分頁） -->
+  <!-- 圖層切換列（合法吸菸區在最前，動態分頁依序排列） -->
   <div class="header-layers" id="header-layers">
-    <button class="layer-btn active" id="report-layer-btn" style="--lc:#e74c3c" title="顯示／隱藏即時通報資料">
-      <span class="layer-dot"></span>即時通報<span class="layer-count" id="report-layer-count"></span>
-    </button>
     <button class="layer-btn" id="zone-toggle-btn" style="--lc:#27ae60" title="顯示／隱藏合法吸菸區">
       <span class="layer-dot"></span>合法吸菸區<span class="layer-count" id="zone-count"></span>
     </button>
@@ -492,7 +488,7 @@ var MOCK_URL = './api-mock.json';
 var SMOKING_ZONE_API = './smoking-zones.json';
 var SHEET_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
 var GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-               '/gviz/tq?tqx=responseHandler:_gvizCallback&sheet=SmokingReports';
+               '/gviz/tq?tqx=responseHandler:_gvizCallback&sheet=%E6%B8%AC%E8%A9%A6%E8%B3%87%E6%96%99';
 
 // ── Google Sheets API v4 金鑰（用於自動列出分頁）
 //    在 Google Cloud Console 建立 API key 後填入（限制為 Sheets API 即可）
@@ -512,7 +508,6 @@ var SLOT_COLORS = [
 ];
 
 var clusterBaseColor = '#e74c3c';
-var reportLayerVisible = true;
 var allFeatures = [];
 var viewMode = 'cluster';
 var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
@@ -1067,16 +1062,14 @@ document.getElementById('month-all').addEventListener('click', function() {
   applyFilter();
 });
 
-// 重建即時通報 supercluster（sheet layers 各自維護自己的 sc）
 function updateClusterData() {
-  var features = reportLayerVisible ? getFilteredFeatures() : [];
-  buildSupercluster(features);
+  buildSupercluster(getFilteredFeatures());
   updateClusters();
 }
 
 function applyFilter() {
   var filtered = getFilteredFeatures();
-  var fc = { type: 'FeatureCollection', features: reportLayerVisible ? filtered : [] };
+  var fc = { type: 'FeatureCollection', features: filtered };
   updateClusterData();
   if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
   updateStats(filtered);
@@ -1108,8 +1101,6 @@ function applyData(features) {
   updateSlotBandUI();
   applyFilter();
   document.getElementById('loading').classList.add('hidden');
-  var countEl = document.getElementById('report-layer-count');
-  if (countEl && allFeatures.length > 0) countEl.textContent = ' ' + allFeatures.length.toLocaleString() + ' 筆';
 }
 
 // gviz 回應解析：將 Google Visualization table 轉為 GeoJSON features
@@ -1410,23 +1401,6 @@ function setSmokingZoneVisibility(visible) {
   document.getElementById('zone-toggle-btn').classList.toggle('active', visible);
 }
 
-document.getElementById('report-layer-btn').addEventListener('click', function() {
-  reportLayerVisible = !reportLayerVisible;
-  this.classList.toggle('active', reportLayerVisible);
-  updateClusterData();
-  var filtered = reportLayerVisible ? getFilteredFeatures() : [];
-  var fc = { type: 'FeatureCollection', features: filtered };
-  if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
-  if (viewMode !== 'cluster') {
-    var rawVis = reportLayerVisible ? 'visible' : 'none';
-    if (map.getLayer('layer-halo-raw')) map.setLayoutProperty('layer-halo-raw', 'visibility', rawVis);
-    if (map.getLayer('layer-points-raw')) map.setLayoutProperty('layer-points-raw', 'visibility', rawVis);
-    if (map.getLayer('layer-halo')) map.setLayoutProperty('layer-halo', 'visibility', rawVis);
-    if (map.getLayer('layer-points')) map.setLayoutProperty('layer-points', 'visibility', rawVis);
-  }
-  updateStats(filtered);
-});
-
 document.getElementById('zone-toggle-btn').addEventListener('click', function() {
   smokingZoneVisible = !smokingZoneVisible;
   setSmokingZoneVisibility(smokingZoneVisible);
@@ -1633,7 +1607,7 @@ function createSheetLayerButton(layer) {
 // 將分頁名稱清單轉為地圖圖層 + 按鈕
 function applySheetNames(names) {
   names.forEach(function(name) {
-    if (name === 'SmokingReports') return;
+    if (name === '測試資料') return;
     // 避免重複新增
     if (sheetLayers.some(function(l) { return l.name === name; })) return;
     var color = LAYER_PALETTE[sheetLayers.length % LAYER_PALETTE.length];

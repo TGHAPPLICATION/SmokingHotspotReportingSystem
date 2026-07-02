@@ -1568,6 +1568,7 @@ function loadSheetLayerData(layer) {
 
 function createSheetLayerButton(layer) {
   var btn = document.createElement('button');
+  layer._btn = btn; // 儲存按鈕參考供自動啟用使用
   btn.className = 'layer-btn' + (layer.visible ? ' active' : '');
   btn.style.setProperty('--lc', layer.color);
   btn.innerHTML = '<span class="layer-dot"></span>' + esc(layer.name) +
@@ -1606,27 +1607,34 @@ function createSheetLayerButton(layer) {
 
 // 將分頁名稱清單轉為地圖圖層 + 按鈕
 function applySheetNames(names) {
+  var isFirst = sheetLayers.length === 0;
   names.forEach(function(name) {
     // 避免重複新增
     if (sheetLayers.some(function(l) { return l.name === name; })) return;
     var color = LAYER_PALETTE[sheetLayers.length % LAYER_PALETTE.length];
     var sn = layerSafeName(name);
-    var autoLoad = (name === '測試資料'); // 測試資料預設啟用並自動載入
     var layer = {
       name: name, safeName: sn, color: color,
       sourceId: 'source-' + sn, layerId: 'layer-' + sn,
       clusterSourceId: 'source-cl-' + sn,
       clusterGlowId: 'layer-cl-glow-' + sn,
       clusterLayerId: 'layer-cl-' + sn,
-      sc: null, visible: autoLoad, loaded: false
+      sc: null, visible: false, loaded: false
     };
     sheetLayers.push(layer);
-    if (map.isStyleLoaded()) {
-      addSheetLayer(layer);
-      if (autoLoad) loadSheetLayerData(layer);
-    }
+    if (map.isStyleLoaded()) addSheetLayer(layer);
     createSheetLayerButton(layer);
   });
+  // 第一次取得分頁清單後，自動啟用第一個圖層
+  if (isFirst && sheetLayers.length > 0) {
+    var first = sheetLayers[0];
+    first.visible = true;
+    if (first._btn) first._btn.classList.add('active');
+    if (map.isStyleLoaded()) {
+      addSheetLayer(first);
+      loadSheetLayerData(first);
+    }
+  }
 }
 
 // 取得所有分頁名稱：優先用 Sheets API v4，備援用 EXTRA_SHEETS

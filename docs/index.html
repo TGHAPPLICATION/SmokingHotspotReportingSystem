@@ -889,6 +889,54 @@ var LAYER_VIS = {
   hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
 };
 
+// 取得所有已選取且已載入的分頁圖層的 features 合集
+function getSelectedSheetFeatures() {
+  var combined = [];
+  sheetLayers.forEach(function(l) {
+    if (l.visible && l.loaded && l.features) {
+      combined = combined.concat(l.features);
+    }
+  });
+  return combined;
+}
+
+// 更新左上角統計數字，基於已選取圖層的資料
+function updateSheetStats() {
+  var features = getSelectedSheetFeatures();
+  document.getElementById('stat-visible').textContent = features.length > 0 ? features.length.toLocaleString() : '—';
+  document.getElementById('stat-total').textContent   = features.length > 0 ? features.length.toLocaleString() : '—';
+  if (features.length > 0) {
+    var counts = new Array(12).fill(0);
+    features.forEach(function(f) {
+      var s = parseInt(f.properties && f.properties.time_slot);
+      if (s >= 0 && s < 12) counts[s]++;
+    });
+    var peak = counts.indexOf(Math.max.apply(null, counts));
+    document.getElementById('stat-peak').textContent = SLOT_LABELS[peak] || '—';
+  } else {
+    document.getElementById('stat-peak').textContent = '—';
+  }
+  // 更新即時資料徽章
+  var badge = document.getElementById('data-source-badge');
+  var text  = document.getElementById('data-source-text');
+  if (badge && text) {
+    if (features.length > 0) {
+      badge.className = 'data-source-badge live';
+      text.textContent = '已選圖層 • ' + features.length.toLocaleString() + ' 筆';
+    } else {
+      badge.className = 'data-source-badge';
+      text.textContent = '未選取任何圖層';
+    }
+  }
+}
+
+// 將已選取圖層的資料餵給熱力圖 source
+function updateHeatmapSource() {
+  if (!map || !map.getSource('reports-heat')) return;
+  var features = getSelectedSheetFeatures();
+  map.getSource('reports-heat').setData({ type: 'FeatureCollection', features: features });
+}
+
 function setViewMode(mode) {
   viewMode = mode;
   var vis = LAYER_VIS[mode] || LAYER_VIS.hidden;
@@ -915,9 +963,13 @@ function setViewMode(mode) {
   if (mode === 'cluster') {
     updateClusterData();
     updateClusters();
+  } else if (mode === 'heatmap') {
+    clearClusterMarkers();
+    updateHeatmapSource();
   } else {
     clearClusterMarkers();
   }
+  updateSheetStats();
 }
 
 function handleViewBtn(mode) {

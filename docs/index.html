@@ -1611,16 +1611,7 @@ function applySheetNames(names) {
     if (mapLoaded) addSheetLayer(layer);
     createSheetLayerButton(layer);
   });
-  // 第一次取得分頁清單後，自動啟用第一個圖層
-  if (isFirst && sheetLayers.length > 0) {
-    var first = sheetLayers[0];
-    first.visible = true;
-    if (first._btn) first._btn.classList.add('active');
-    if (mapLoaded) {
-      addSheetLayer(first);
-      loadSheetLayerData(first);
-    }
-  }
+  // 第一次取得分頁清單後不自動啟用，使用者需手動點選圖層按鈕
 }
 
 // 取得所有分頁名稱：優先用 Sheets API v4，備援用 EXTRA_SHEETS

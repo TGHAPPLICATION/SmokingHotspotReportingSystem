@@ -134,53 +134,6 @@
   }
   .panel-legend.hidden { display: none; }
 
-  /* 月份滑桿 */
-  .month-filter { padding: 8px 10px 10px; border-top: 1px solid #21262d; }
-  .month-filter-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-  .month-label { font-size: .72rem; font-weight: 700; color: #e6edf3; text-align: center; margin-bottom: 5px; }
-  .month-nav { display: flex; align-items: center; gap: 5px; }
-  .month-nav-btn {
-    background: rgba(255,255,255,.06); border: 1px solid #30363d;
-    border-radius: 5px; color: #8b949e; font-size: .7rem;
-    cursor: pointer; padding: 2px 7px; transition: all .15s; flex-shrink: 0;
-  }
-  .month-nav-btn:hover:not(:disabled) { background: rgba(255,255,255,.12); color: #e6edf3; }
-  .month-nav-btn:disabled { opacity: .3; cursor: default; }
-  .month-slider-wrap { position: relative; padding: 4px 0 2px; }
-  input[type=range].month-slider {
-    -webkit-appearance: none; width: 100%; height: 3px;
-    background: #30363d; border-radius: 2px; outline: none; cursor: pointer;
-  }
-  input[type=range].month-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px;
-    border-radius: 50%; background: #e74c3c; border: 2px solid #fff;
-    cursor: pointer; transition: transform .1s;
-  }
-  input[type=range].month-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
-  .month-all-btn {
-    width: 100%; margin-top: 6px;
-    background: rgba(255,255,255,.04); border: 1px solid #30363d;
-    border-radius: 5px; color: #6e7681; font-size: .63rem;
-    cursor: pointer; padding: 4px; transition: all .15s;
-  }
-  .month-all-btn:hover { background: rgba(255,255,255,.09); color: #e6edf3; }
-  .month-all-btn.active { background: rgba(96,165,250,.12); border-color: #60a5fa; color: #60a5fa; }
-  .slot-filter { padding: 7px 10px 9px; border-top: 1px solid #21262d; }
-  .slot-filter-title { font-size: .62rem; font-weight: 700; color: #6e7681; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
-  .slot-filter-clear { font-size: .6rem; font-weight: 400; color: #484f58; cursor: pointer; text-transform: none; letter-spacing: 0; }
-  .slot-filter-clear:hover { color: #8b949e; }
-  .slot-band {
-    display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
-    font-size: .68rem; color: #8b949e; cursor: pointer;
-    padding: 2px 4px; border-radius: 4px; user-select: none;
-    transition: background .15s;
-  }
-  .slot-band:last-child { margin-bottom: 0; }
-  .slot-band:hover { background: rgba(255,255,255,.06); }
-  .slot-band.active { color: #e6edf3; background: rgba(255,255,255,.1); }
-  .slot-band.dimmed { opacity: .35; }
-  .slot-band .band-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .slot-band .band-count { margin-left: auto; font-size: .6rem; color: #484f58; }
 
   /* ── Header 圖層面板 ── */
   .header-layers {
@@ -241,12 +194,6 @@
   .popup-time { color: #6e7681; font-size: .7rem; margin-top: 5px; }
 
   /* ── Loading ── */
-  .loading-overlay {
-    position: absolute; inset: 0; background: rgba(13,17,23,.65);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 20; backdrop-filter: blur(4px);
-  }
-  .loading-overlay.hidden { display: none; }
   .spinner {
     width: 36px; height: 36px; border: 3px solid #30363d;
     border-top-color: #e74c3c; border-radius: 50%; animation: spin .8s linear infinite;
@@ -444,29 +391,6 @@
       <div class="legend-row"><div class="legend-swatch" style="background:#f87171; width:11px; height:11px;"></div><span>16–24 時</span></div>
     </div>
 
-    <!-- 月份滑桿 -->
-    <div class="month-filter" id="month-filter">
-      <div class="month-filter-title">月份篩選</div>
-      <div class="month-label" id="month-label">全部時間</div>
-      <div class="month-slider-wrap">
-        <input type="range" class="month-slider" id="month-slider" min="0" max="0" value="0" step="1">
-      </div>
-      <div class="month-nav">
-        <button class="month-nav-btn" id="month-prev">◀</button>
-        <button class="month-all-btn active" id="month-all">全部時間</button>
-        <button class="month-nav-btn" id="month-next">▶</button>
-      </div>
-    </div>
-
-    <!-- 時段篩選（所有模式共用）-->
-    <div class="slot-filter" id="slot-filter">
-      <div class="slot-filter-title">通報時段 <span class="slot-filter-clear" id="slot-clear">全選</span></div>
-      <div class="slot-band active" data-band="0"><div class="band-dot" style="background:#60a5fa"></div><span>00–04 時</span><span class="band-count" id="bc-0"></span></div>
-      <div class="slot-band active" data-band="1"><div class="band-dot" style="background:#34d399"></div><span>04–10 時</span><span class="band-count" id="bc-1"></span></div>
-      <div class="slot-band active" data-band="2"><div class="band-dot" style="background:#facc15"></div><span>10–16 時</span><span class="band-count" id="bc-2"></span></div>
-      <div class="slot-band active" data-band="3"><div class="band-dot" style="background:#f87171"></div><span>16–24 時</span><span class="band-count" id="bc-3"></span></div>
-    </div>
-
   </div>
 
   <!-- 右側圖示按鈕 -->
@@ -475,7 +399,6 @@
     <button class="icon-btn refresh" id="refresh-btn" title="重新載入">🔄</button>
   </div>
 
-  <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.js"></script>
@@ -487,8 +410,6 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oi
 var MOCK_URL = './api-mock.json';
 var SMOKING_ZONE_API = './smoking-zones.json';
 var SHEET_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
-var GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-               '/gviz/tq?tqx=responseHandler:_gvizCallback&sheet=%E6%B8%AC%E8%A9%A6%E8%B3%87%E6%96%99';
 
 // ── Google Sheets API v4 金鑰（用於自動列出分頁）
 //    在 Google Cloud Console 建立 API key 後填入（限制為 Sheets API 即可）
@@ -508,36 +429,12 @@ var SLOT_COLORS = [
 ];
 
 var clusterBaseColor = '#e74c3c';
-var allFeatures = [];
 var viewMode = 'cluster';
-var selectedMonth = null;   // null = 全部；'YYYY-MM' = 指定月份
-var availableMonths = [];   // 排序後的月份字串陣列
 var map;
 
-var sc = null;
 var mapLoaded = false;
 var smokingZoneVisible = false;
 var smokingZoneLoaded = false;
-
-function setClusterColor(color) {
-  clusterBaseColor = color;
-  if (map && map.getLayer('layer-cluster-glow')) {
-    map.setPaintProperty('layer-cluster-glow', 'circle-color', color);
-  }
-  if (map && map.getLayer('layer-clusters')) {
-    map.setPaintProperty('layer-clusters', 'circle-color', color);
-  }
-  document.querySelectorAll('.cluster-swatch').forEach(function(el) {
-    el.style.background = color;
-  });
-}
-
-function buildSupercluster(features) {
-  try {
-    sc = new Supercluster({ radius: 50, maxZoom: 15 });
-    sc.load(features);
-  } catch(e) { sc = null; }
-}
 
 function buildSheetSupercluster(layer) {
   try {
@@ -551,11 +448,6 @@ function updateClusters() {
   var bounds = map.getBounds();
   var zoom = Math.floor(map.getZoom());
   var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-  // 主資料管道（分群模式才顯示紅色圓圈）
-  if (viewMode === 'cluster' && sc && map.getSource('reports')) {
-    var clusters = sc.getClusters(bbox, zoom);
-    map.getSource('reports').setData({ type: 'FeatureCollection', features: clusters });
-  }
   // 各分頁圖層獨立分群（與 viewMode 無關，由圖層按鈕自行控制）
   sheetLayers.forEach(function(l) {
     if (!l.visible || !l.sc || !map.getSource(l.clusterSourceId)) return;
@@ -574,7 +466,6 @@ function clearClusterMarkers() {
 function updateClusterLabels() {
   clearClusterMarkers();
   var layerIds = [];
-  if (viewMode === 'cluster' && map.getLayer('layer-clusters')) layerIds.push('layer-clusters');
   sheetLayers.forEach(function(l) { if (l.visible && l.clusterLayerId && map.getLayer(l.clusterLayerId)) layerIds.push(l.clusterLayerId); });
   if (!layerIds.length) return;
   var features = map.queryRenderedFeatures({ layers: layerIds });
@@ -607,8 +498,6 @@ var SLOT_BANDS = [
   { slots: [5, 6, 7],     label: '10–16 時' },
   { slots: [8, 9, 10, 11], label: '16–24 時' }
 ];
-// 目前選取的 band 集合（全選狀態）
-var activeBands = new Set([0, 1, 2, 3]);
 
 map = new maplibregl.Map({
   container: 'map',
@@ -621,15 +510,9 @@ map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-ri
 
 map.on('load', function() {
   try { initLayers(); } catch(e) { console.error('[initLayers] FAILED:', e); }
-  loadData();
 });
 
 function initLayers() {
-  map.addSource('reports', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] }
-  });
-
   map.addSource('reports-heat', {
     type: 'geojson',
     data: { type: 'FeatureCollection', features: [] }
@@ -654,88 +537,6 @@ function initLayers() {
       // 半徑壓小，拉近才放大，讓熱點保持空間獨立
       'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 13, 12, 15, 22],
       'heatmap-opacity': 0.85
-    }
-  });
-
-  // ── 分群模式圖層（source: reports，有 cluster） ──
-
-  // 分群外暈光環
-  map.addLayer({
-    id: 'layer-cluster-glow', type: 'circle', source: 'reports',
-    filter: ['has', 'point_count'],
-    layout: { visibility: 'visible' },
-    paint: {
-      'circle-color': '#e74c3c',
-      'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 22, 5, 34, 15, 48, 30, 62],
-      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.06, 5, 0.10, 15, 0.15, 30, 0.22],
-      'circle-blur': 0.65, 'circle-stroke-width': 0
-    }
-  });
-
-  // 分群主圓
-  map.addLayer({
-    id: 'layer-clusters', type: 'circle', source: 'reports',
-    filter: ['has', 'point_count'],
-    layout: { visibility: 'visible' },
-    paint: {
-      'circle-color': '#e74c3c',
-      'circle-radius': ['step', ['coalesce', ['get', 'point_count'], 0], 14, 5, 22, 15, 32, 30, 42],
-      'circle-opacity': ['step', ['coalesce', ['get', 'point_count'], 0], 0.38, 5, 0.58, 15, 0.78, 30, 0.94],
-      'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(255,255,255,.65)'
-    }
-  });
-
-
-
-  // reports source，filter: !has point_count
-  map.addLayer({
-    id: 'layer-halo', type: 'circle', source: 'reports',
-    filter: ['!', ['has', 'point_count']],
-    layout: { visibility: 'visible' },
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 8, 18, 16],
-      'circle-color': '#ffffff', 'circle-opacity': 0.18, 'circle-stroke-width': 0
-    }
-  });
-
-  map.addLayer({
-    id: 'layer-points', type: 'circle', source: 'reports',
-    filter: ['!', ['has', 'point_count']],
-    layout: { visibility: 'visible' },
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 14, 5, 18, 12],
-      'circle-color': [
-        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
-        '#60a5fa', 2, '#34d399', 5, '#facc15', 8, '#f87171'
-      ],
-      'circle-opacity': 0.9, 'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.8
-    }
-  });
-
-  // ── 點位模式圖層（source: reports-heat，無分群，顯示全部原始點）──
-  map.addLayer({
-    id: 'layer-halo-raw', type: 'circle', source: 'reports-heat',
-    layout: { visibility: 'none' },
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 9, 18, 16],
-      'circle-color': '#ffffff', 'circle-opacity': 0.15, 'circle-stroke-width': 0
-    }
-  });
-
-  map.addLayer({
-    id: 'layer-points-raw', type: 'circle', source: 'reports-heat',
-    layout: { visibility: 'none' },
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6, 18, 11],
-      'circle-color': [
-        'step', ['coalesce', ['to-number', ['get', 'time_slot']], 0],
-        '#60a5fa',  // slot 0–1  (00–04 時)
-        2,  '#34d399',  // slot 2–4  (04–10 時)
-        5,  '#facc15',  // slot 5–7  (10–16 時)
-        8,  '#f87171'   // slot 8–11 (16–24 時)
-      ],
-      'circle-opacity': 0.85, 'circle-stroke-width': 0
     }
   });
 
@@ -822,38 +623,6 @@ function initLayers() {
   map.on('mouseenter', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = ''; });
 
-  // ── 互動事件 ──
-  map.on('click', 'layer-clusters', function(e) {
-    var feature = map.queryRenderedFeatures(e.point, { layers: ['layer-clusters'] })[0];
-    if (!feature || !sc) return;
-    var clusterId = feature.properties.cluster_id;
-    var zoom = sc.getClusterExpansionZoom(clusterId);
-    map.easeTo({ center: feature.geometry.coordinates, zoom: Math.min(zoom, 18), duration: 400 });
-  });
-
-  function showPointPopup(e) {
-    var props = e.features[0].properties;
-    var coords = e.features[0].geometry.coordinates.slice();
-    var slot = parseInt(props.time_slot) || 0;
-    var ts = props.timestamp ? new Date(props.timestamp).toLocaleString('zh-TW') : '';
-    new maplibregl.Popup({ offset: 12, maxWidth: '240px' })
-      .setLngLat(coords)
-      .setHTML(
-        '<div class="popup-slot">⏱ ' + SLOT_LABELS[slot] + '</div>' +
-        (props.address_input ? '<div class="popup-addr">📍 ' + esc(props.address_input) + '</div>' : '') +
-        (props.description   ? '<div class="popup-desc">' + esc(props.description) + '</div>' : '') +
-        (ts ? '<div class="popup-time">🕐 ' + ts + '</div>' : '')
-      ).addTo(map);
-  }
-
-  map.on('click', 'layer-points', showPointPopup);
-  map.on('click', 'layer-points-raw', showPointPopup);
-
-  ['layer-clusters','layer-points','layer-points-raw'].forEach(function(id) {
-    map.on('mouseenter', id, function() { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
-  });
-
   map.on('moveend', function() { updateClusters(); applySheetLayerZoom(); });
   map.on('zoomend', function() { updateClusters(); applySheetLayerZoom(); });
 }
@@ -883,10 +652,10 @@ function esc(s) {
 }
 
 var LAYER_VIS = {
-  cluster: { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
-  heatmap: { 'layer-heatmap': 'visible', 'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    },
-  points:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'visible', 'layer-points-raw': 'visible' },
-  hidden:  { 'layer-heatmap': 'none',    'layer-cluster-glow': 'none',    'layer-clusters': 'none',    'layer-halo': 'none',    'layer-points': 'none',    'layer-halo-raw': 'none',    'layer-points-raw': 'none'    }
+  cluster: { 'layer-heatmap': 'none' },
+  heatmap: { 'layer-heatmap': 'visible' },
+  points:  { 'layer-heatmap': 'none' },
+  hidden:  { 'layer-heatmap': 'none' }
 };
 
 // 取得所有已選取且已載入的分頁圖層的 features 合集
@@ -961,7 +730,6 @@ function setViewMode(mode) {
   document.getElementById('legend-cluster').classList.toggle('hidden', mode !== 'cluster');
   document.getElementById('legend-points').classList.toggle('hidden', mode !== 'points');
   if (mode === 'cluster') {
-    updateClusterData();
     updateClusters();
   } else if (mode === 'heatmap') {
     clearClusterMarkers();
@@ -979,27 +747,6 @@ function handleViewBtn(mode) {
 document.getElementById('btn-cluster').addEventListener('click', function() { handleViewBtn('cluster'); });
 document.getElementById('btn-heatmap').addEventListener('click', function() { handleViewBtn('heatmap'); });
 document.getElementById('btn-points').addEventListener('click',  function() { handleViewBtn('points'); });
-
-// 時段 band 篩選
-document.querySelectorAll('.slot-band').forEach(function(el) {
-  el.addEventListener('click', function() {
-    var b = parseInt(el.dataset.band);
-    if (activeBands.has(b)) {
-      // 至少保留一個選取
-      if (activeBands.size > 1) activeBands.delete(b);
-    } else {
-      activeBands.add(b);
-    }
-    updateSlotBandUI();
-    applyFilter();
-  });
-});
-document.getElementById('slot-clear').addEventListener('click', function() {
-  if (activeBands.size === 4) return; // 已全選
-  activeBands = new Set([0, 1, 2, 3]);
-  updateSlotBandUI();
-  applyFilter();
-});
 
 function setDataSource(type, text) {
   var badge = document.getElementById('data-source-badge');
@@ -1027,230 +774,12 @@ function normalizeFeatures(features) {
   });
 }
 
-function updateStats(filtered) {
-  document.getElementById('stat-visible').textContent = filtered.length;
-  document.getElementById('stat-total').textContent   = allFeatures.length;
-  var src = filtered.length > 0 ? filtered : allFeatures;
-  if (src.length > 0) {
-    var counts = new Array(12).fill(0);
-    src.forEach(function(f) {
-      var s = parseInt(f.properties.time_slot);
-      if (s >= 0 && s < 12) counts[s]++;
-    });
-    var peak = counts.indexOf(Math.max.apply(null, counts));
-    document.getElementById('stat-peak').textContent = SLOT_LABELS[peak];
-  }
-}
-
 function featureMonth(f) {
   var ts = f.properties.timestamp;
   if (!ts) return null;
   var d = new Date(ts);
   if (isNaN(d)) return null;
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-}
-
-function getFilteredFeatures() {
-  // 月份篩選
-  var base = allFeatures;
-  if (selectedMonth) {
-    base = allFeatures.filter(function(f) { return featureMonth(f) === selectedMonth; });
-  }
-  // 時段 band 篩選
-  var allowedSlots = new Set();
-  activeBands.forEach(function(b) {
-    SLOT_BANDS[b].slots.forEach(function(s) { allowedSlots.add(s); });
-  });
-  if (allowedSlots.size === 12) return base;
-  return base.filter(function(f) {
-    return allowedSlots.has(parseInt(f.properties.time_slot));
-  });
-}
-
-function initMonthSlider() {
-  // 從 allFeatures 提取所有月份並排序
-  var monthSet = {};
-  allFeatures.forEach(function(f) {
-    var m = featureMonth(f);
-    if (m) monthSet[m] = true;
-  });
-  availableMonths = Object.keys(monthSet).sort();
-  if (availableMonths.length === 0) return;
-
-  var slider = document.getElementById('month-slider');
-  // 0 = 全部時間，1..n = 月份索引
-  slider.min = 0;
-  slider.max = availableMonths.length;
-  slider.value = 0;
-  updateMonthUI();
-}
-
-function updateMonthUI() {
-  var slider = document.getElementById('month-slider');
-  var idx = parseInt(slider.value);
-  var allBtn = document.getElementById('month-all');
-  var label = document.getElementById('month-label');
-  var prevBtn = document.getElementById('month-prev');
-  var nextBtn = document.getElementById('month-next');
-
-  if (idx === 0) {
-    selectedMonth = null;
-    label.textContent = '全部時間';
-    allBtn.classList.add('active');
-  } else {
-    selectedMonth = availableMonths[idx - 1];
-    label.textContent = selectedMonth.replace('-', ' 年 ') + ' 月';
-    allBtn.classList.remove('active');
-  }
-  prevBtn.disabled = idx === 0;
-  nextBtn.disabled = idx === availableMonths.length;
-}
-
-document.getElementById('month-slider').addEventListener('input', function() {
-  updateMonthUI();
-  applyFilter();
-});
-document.getElementById('month-prev').addEventListener('click', function() {
-  var slider = document.getElementById('month-slider');
-  if (parseInt(slider.value) > 0) { slider.value--; updateMonthUI(); applyFilter(); }
-});
-document.getElementById('month-next').addEventListener('click', function() {
-  var slider = document.getElementById('month-slider');
-  if (parseInt(slider.value) < availableMonths.length) { slider.value++; updateMonthUI(); applyFilter(); }
-});
-document.getElementById('month-all').addEventListener('click', function() {
-  var slider = document.getElementById('month-slider');
-  slider.value = 0;
-  updateMonthUI();
-  applyFilter();
-});
-
-function updateClusterData() {
-  buildSupercluster(getFilteredFeatures());
-  updateClusters();
-}
-
-function applyFilter() {
-  var filtered = getFilteredFeatures();
-  var fc = { type: 'FeatureCollection', features: filtered };
-  updateClusterData();
-  if (map.getSource('reports-heat')) map.getSource('reports-heat').setData(fc);
-  updateStats(filtered);
-}
-
-function updateSlotBandUI() {
-  var allActive = activeBands.size === 4;
-  document.getElementById('slot-clear').textContent = allActive ? '全選' : '清除篩選';
-  // 計算每個 band 的資料筆數
-  var counts = [0, 0, 0, 0];
-  allFeatures.forEach(function(f) {
-    var s = parseInt(f.properties.time_slot);
-    for (var b = 0; b < SLOT_BANDS.length; b++) {
-      if (SLOT_BANDS[b].slots.indexOf(s) !== -1) { counts[b]++; break; }
-    }
-  });
-  document.querySelectorAll('.slot-band').forEach(function(el) {
-    var b = parseInt(el.dataset.band);
-    var isActive = activeBands.has(b);
-    el.classList.toggle('active', isActive);
-    el.classList.toggle('dimmed', !isActive);
-    document.getElementById('bc-' + b).textContent = counts[b] > 0 ? counts[b].toLocaleString() : '';
-  });
-}
-
-function applyData(features) {
-  allFeatures = features;
-  initMonthSlider();
-  updateSlotBandUI();
-  applyFilter();
-  document.getElementById('loading').classList.add('hidden');
-}
-
-// gviz 回應解析：將 Google Visualization table 轉為 GeoJSON features
-function gvizTableToFeatures(table) {
-  var cols = table.cols.map(function(c) { return c.label || c.id; });
-  var idx = {};
-  cols.forEach(function(name, i) { idx[name] = i; });
-
-  // 欄位對應（依 Code.gs COL 定義）
-  var iTs  = idx['timestamp']    !== undefined ? idx['timestamp']    : 1;
-  var iSl  = idx['time_slot']    !== undefined ? idx['time_slot']    : 2;
-  var iLat = idx['lat']          !== undefined ? idx['lat']          : 3;
-  var iLng = idx['lng']          !== undefined ? idx['lng']          : 4;
-  var iAdr = idx['address_input']!== undefined ? idx['address_input']: 6;
-  var iDsc = idx['description']  !== undefined ? idx['description']  : 7;
-
-  var features = [];
-  (table.rows || []).forEach(function(row) {
-    var c = row.c || [];
-    var lat = parseFloat(c[iLat] && c[iLat].v);
-    var lng = parseFloat(c[iLng] && c[iLng].v);
-    if (isNaN(lat) || isNaN(lng)) return;
-    features.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: {
-        timestamp:     c[iTs]  ? String(c[iTs].v  || '') : '',
-        time_slot:     c[iSl]  ? parseInt(c[iSl].v) || 0 : 0,
-        address_input: c[iAdr] ? String(c[iAdr].v || '') : '',
-        description:   c[iDsc] ? String(c[iDsc].v || '') : ''
-      }
-    });
-  });
-  return features;
-}
-
-var _gvizTimer = null;
-window._gvizCallback = function(resp) {
-  if (_gvizTimer) { clearTimeout(_gvizTimer); _gvizTimer = null; }
-  var tag = document.getElementById('_gviz_script');
-  if (tag) tag.parentNode.removeChild(tag);
-  try {
-    if (resp.status !== 'ok') throw new Error('gviz status: ' + resp.status);
-    var features = normalizeFeatures(gvizTableToFeatures(resp.table));
-    setDataSource('live', '即時資料 • ' + features.length + ' 筆');
-    applyData(features);
-    fitToFeatures(features);
-  } catch(e) {
-    console.warn('gviz 解析失敗，改用 mock：', e);
-    loadMockData();
-  }
-};
-
-function loadMockData() {
-  setDataSource('mock', '示範資料');
-  fetch(MOCK_URL)
-    .then(function(r) { return r.json(); })
-    .then(function(geojson) { applyData(normalizeFeatures(geojson.features || [])); })
-    .catch(function(e) {
-      setDataSource('err', '載入失敗');
-      document.getElementById('loading').classList.add('hidden');
-      console.error(e);
-    });
-}
-
-function loadData() {
-  document.getElementById('loading').classList.remove('hidden');
-  setDataSource('', '載入中…');
-
-  var old = document.getElementById('_gviz_script');
-  if (old) old.parentNode.removeChild(old);
-
-  // 逾時 10 秒 fallback mock
-  _gvizTimer = setTimeout(function() {
-    console.warn('gviz 逾時，改用 mock');
-    loadMockData();
-  }, 10000);
-
-  var script = document.createElement('script');
-  script.id  = '_gviz_script';
-  script.src = GVIZ_URL;
-  script.onerror = function() {
-    clearTimeout(_gvizTimer); _gvizTimer = null;
-    console.warn('gviz script 載入失敗，改用 mock');
-    loadMockData();
-  };
-  document.head.appendChild(script);
 }
 
 document.getElementById('locate-btn').addEventListener('click', function() {
@@ -1260,7 +789,11 @@ document.getElementById('locate-btn').addEventListener('click', function() {
   });
 });
 
-document.getElementById('refresh-btn').addEventListener('click', loadData);
+document.getElementById('refresh-btn').addEventListener('click', function() {
+  sheetLayers.forEach(function(l) {
+    if (l.visible) { l.loaded = false; loadSheetLayerData(l); }
+  });
+});
 
 // ── 報表面板 ──────────────────────────────────────────────────
 var chartTrend = null, chartSlot = null, chartStack = null;
@@ -1279,6 +812,7 @@ function slotToBand(s) {
 function buildReportData() {
   // 月份 → { total, bands[4] }
   var monthMap = {};
+  var allFeatures = getSelectedSheetFeatures();
   allFeatures.forEach(function(f) {
     var m = featureMonth(f);
     if (!m) return;
@@ -1297,9 +831,10 @@ function renderReportCharts() {
   if (!months.length) return;
 
   var totals = months.map(function(m) { return monthMap[m].total; });
+  var allFeaturesForReport = getSelectedSheetFeatures();
 
   // ── 指標卡 ──
-  document.getElementById('kpi-total').textContent = allFeatures.length.toLocaleString();
+  document.getElementById('kpi-total').textContent = allFeaturesForReport.length.toLocaleString();
   document.getElementById('kpi-months').textContent = months.length + ' 個月';
 
   // 環比（最近兩個月）
@@ -1326,7 +861,7 @@ function renderReportCharts() {
 
   // 全域最熱時段
   var slotCounts = new Array(12).fill(0);
-  allFeatures.forEach(function(f) {
+  allFeaturesForReport.forEach(function(f) {
     var s = parseInt(f.properties.time_slot) || 0;
     if (s >= 0 && s < 12) slotCounts[s]++;
   });
@@ -1367,7 +902,7 @@ function renderReportCharts() {
 
   // ── 橫條圖：時段分布 ──
   var bandTotals = [0,0,0,0];
-  allFeatures.forEach(function(f) {
+  allFeaturesForReport.forEach(function(f) {
     bandTotals[slotToBand(parseInt(f.properties.time_slot) || 0)]++;
   });
   if (chartSlot) chartSlot.destroy();
@@ -1424,7 +959,7 @@ function renderReportCharts() {
 
 document.getElementById('analytics-btn').addEventListener('click', function() {
   document.getElementById('report-panel').classList.add('open');
-  if (allFeatures.length > 0) renderReportCharts();
+  if (getSelectedSheetFeatures().length > 0) renderReportCharts();
 });
 document.getElementById('report-close').addEventListener('click', function() {
   document.getElementById('report-panel').classList.remove('open');

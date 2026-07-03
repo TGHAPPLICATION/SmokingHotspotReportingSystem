@@ -854,21 +854,29 @@ function initLayers() {
     map.on('mouseleave', id, function() { map.getCanvas().style.cursor = ''; });
   });
 
-  map.on('moveend', updateClusters);
-  map.on('zoomend', function() {
-    var z = map.getZoom();
-    // 放大超過 supercluster maxZoom 時自動切換點位模式
-    if (viewMode === 'cluster' && z > 15) {
-      _autoSwitchedMode = true;
-      setViewMode('points');
-    } else if (_autoSwitchedMode && viewMode === 'points' && z <= 14) {
-      _autoSwitchedMode = false;
-      setViewMode('cluster');
-    }
-    updateClusters();
-  });
+  map.on('moveend', function() { updateClusters(); applySheetLayerZoom(); });
+  map.on('zoomend', function() { updateClusters(); applySheetLayerZoom(); });
 }
-var _autoSwitchedMode = false;
+
+// 分群模式放大超過 maxZoom 時，只切換分頁圖層的顯示方式（不改 viewMode，不動主資料）
+function applySheetLayerZoom() {
+  if (viewMode !== 'cluster') return;
+  var highZoom = map.getZoom() > 15;
+  sheetLayers.forEach(function(l) {
+    if (!l.visible) return;
+    var clVis  = highZoom ? 'none' : 'visible';
+    var dotVis = highZoom ? 'visible' : 'none';
+    if (map.getLayer(l.clusterGlowId))  map.setLayoutProperty(l.clusterGlowId,  'visibility', clVis);
+    if (map.getLayer(l.clusterLayerId)) map.setLayoutProperty(l.clusterLayerId, 'visibility', clVis);
+    if (map.getLayer(l.layerId)) {
+      if (highZoom && l.loaded && map.getSource(l.sourceId)) {
+        map.getSource(l.sourceId).setData({ type: 'FeatureCollection', features: l.features || [] });
+      }
+      map.setLayoutProperty(l.layerId, 'visibility', dotVis);
+    }
+  });
+  if (highZoom) clearClusterMarkers();
+}
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -889,12 +897,13 @@ function setViewMode(mode) {
   });
   // 分頁圖層：根據 mode 決定顯示 cluster 圓圈或個別點位
   sheetLayers.forEach(function(l) {
-    var clVis  = (mode === 'cluster' && l.visible) ? 'visible' : 'none';
-    var dotVis = (mode === 'points'  && l.visible) ? 'visible' : 'none';
+    var highZoom = (mode === 'cluster' && map.getZoom && map.getZoom() > 15);
+    var clVis  = (mode === 'cluster' && l.visible && !highZoom) ? 'visible' : 'none';
+    var dotVis = ((mode === 'points' || highZoom) && l.visible) ? 'visible' : 'none';
     if (map.getLayer(l.clusterGlowId))  map.setLayoutProperty(l.clusterGlowId,  'visibility', clVis);
     if (map.getLayer(l.clusterLayerId)) map.setLayoutProperty(l.clusterLayerId, 'visibility', clVis);
     if (map.getLayer(l.layerId))        map.setLayoutProperty(l.layerId,         'visibility', dotVis);
-    if (mode === 'points' && l.visible && l.loaded && map.getSource(l.sourceId)) {
+    if ((mode === 'points' || highZoom) && l.visible && l.loaded && map.getSource(l.sourceId)) {
       map.getSource(l.sourceId).setData({ type: 'FeatureCollection', features: l.features || [] });
     }
   });
@@ -912,8 +921,6 @@ function setViewMode(mode) {
 }
 
 function handleViewBtn(mode) {
-  // 3 選 1 互斥，不允許取消選取
-  _autoSwitchedMode = false;
   setViewMode(mode);
 }
 

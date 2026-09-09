@@ -194,20 +194,29 @@ function getSheetRowsJson(e) {
   if (!sheet) return jsonpErrorResponse_('SHEET_NOT_FOUND', callback);
 
   var values = sheet.getDataRange().getValues();
-  var headers = values.length > 0 ? values[0] : [];
-  var headersLower = headers.map(function(h) { return String(h).toLowerCase(); });
+  var headerRow = values.length > 0 ? values[0] : [];
+  var headerRowLower = headerRow.map(function(h) { return String(h).toLowerCase(); });
 
   var latIdx = -1, lngIdx = -1;
-  headersLower.forEach(function(h, i) {
+  headerRowLower.forEach(function(h, i) {
     if (latIdx < 0 && LAT_KEYS.indexOf(h) >= 0) latIdx = i;
     if (lngIdx < 0 && LNG_KEYS.indexOf(h) >= 0) lngIdx = i;
   });
 
+  // 只有在第一列真的比對到「緯度／經度」欄位名稱時，才把它當成標題列跳過；
+  // 否則代表這個分頁根本沒有標題列，第一列其實已經是資料，不能捨棄。
+  var hasHeaderRow = latIdx >= 0 && lngIdx >= 0;
+  var startRow = hasHeaderRow ? 1 : 0;
+
   var features = [];
-  for (var r = 1; r < values.length; r++) {
+  for (var r = startRow; r < values.length; r++) {
     var row = values[r];
-    var lat, lng;
-    if (latIdx >= 0 && lngIdx >= 0) {
+    // 明確重設成 undefined：每一列都要重新判斷，不能沿用上一列殘留的值
+    // （若只宣告 var lat, lng; 不指定初始值，在迴圈中不會被重設，會導致
+    //  找不到欄位名稱時，全部列位都卡在第一列算出來的座標）
+    var lat = undefined;
+    var lng = undefined;
+    if (hasHeaderRow) {
       lat = parseFloat(row[latIdx]);
       lng = parseFloat(row[lngIdx]);
     } else {
@@ -222,7 +231,12 @@ function getSheetRowsJson(e) {
     if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) continue;
 
     var props = {};
-    headers.forEach(function(h, i) { props[h] = row[i]; });
+    if (hasHeaderRow) {
+      headerRow.forEach(function(h, i) { props[h] = row[i]; });
+    } else {
+      // 沒有標題列可用時，用固定的欄位序號命名，避免把資料本身的值誤植為欄位名稱
+      row.forEach(function(v, i) { props['col' + i] = v; });
+    }
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [lng, lat] },

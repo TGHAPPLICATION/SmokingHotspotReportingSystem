@@ -24,11 +24,20 @@ var COL = {
 
 // ── 頁面服務（表單主頁）─────────────────────────────────────
 function doGet(e) {
-  var action = e && e.parameter && e.parameter.action;
+  var action   = e && e.parameter && e.parameter.action;
+  var callback = e && e.parameter && e.parameter.callback;
 
-  if (action === 'getReports')  return getReportsJson(e);
-  if (action === 'listSheets')  return listSheetsJson(e);
-  if (action === 'getSheetRows') return getSheetRowsJson(e);
+  try {
+    if (action === 'getReports')   return getReportsJson(e);
+    if (action === 'listSheets')   return listSheetsJson(e);
+    if (action === 'getSheetRows') return getSheetRowsJson(e);
+  } catch (err) {
+    // 未包裝的例外（例如 Config.gs 找不到 SHEET_ID）若直接拋出，
+    // Apps Script 會回傳錯誤頁面，前端的 <script> JSONP 讀取會被
+    // 判定為網路層失敗（觸發 onerror），看不到真正的錯誤原因。
+    // 這裡一律轉成 JSONP 能執行的錯誤訊息，方便直接從瀏覽器 console 除錯。
+    return jsonpErrorResponse_(err.message, callback);
+  }
 
   // 回傳表單 HTML
   return HtmlService

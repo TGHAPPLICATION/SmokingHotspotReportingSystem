@@ -251,6 +251,7 @@
     transition: all .2s; white-space: nowrap; flex-shrink: 0;
   }
   .analytics-btn:hover { background: rgba(96,165,250,.22); }
+  .analytics-btn.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -267,7 +268,7 @@
     </button>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-    <button class="analytics-btn" id="analytics-btn">📊 成效報表</button>
+    <button class="analytics-btn hidden" id="analytics-btn">📊 成效報表</button>
     <a class="report-btn" id="report-link" href="#" target="_blank">📍 通報</a>
   </div>
 </div>
@@ -941,6 +942,21 @@ function renderReportCharts() {
   });
 }
 
+// 依目前「已開啟」的圖層，決定是否顯示「📊 成效報表」按鈕：
+// - 沒有任何圖層開啟 → 不顯示
+// - 已開啟的圖層裡，只要有一個不具備報表所需的 timestamp 資料 → 不顯示
+// - 已開啟的圖層全部都具備報表資料 → 顯示（報表本身就是把它們的 features 疊加一起統計）
+function updateReportButtonVisibility() {
+  var btn = document.getElementById('analytics-btn');
+  if (!btn) return;
+  var activeLayers = sheetLayers.filter(function(l) { return l.visible; });
+  var canShow = activeLayers.length > 0 && activeLayers.every(function(l) {
+    return l.loaded && l.canReport;
+  });
+  btn.classList.toggle('hidden', !canShow);
+  if (!canShow) document.getElementById('report-panel').classList.remove('open');
+}
+
 document.getElementById('analytics-btn').addEventListener('click', function() {
   document.getElementById('report-panel').classList.add('open');
   if (getSelectedSheetFeatures().length > 0) renderReportCharts();
@@ -1079,6 +1095,12 @@ function loadSheetLayerData(layer) {
       var features = (resp && resp.features) || [];
       layer.features = features;
       layer.loaded = true;
+      layer.canReport = features.some(function(f) {
+        var ts = f.properties && f.properties.timestamp;
+        if (!ts) return false;
+        var d = new Date(ts);
+        return !isNaN(d.getTime());
+      });
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
       if (layer.visible) {
@@ -1089,8 +1111,10 @@ function loadSheetLayerData(layer) {
         setViewMode(viewMode);
         setTimeout(updateClusters, 600);
       }
+      updateReportButtonVisibility();
     } catch(e) {
       console.warn('[sheet-layer] ' + layer.name + ' 載入失敗', e);
+      updateReportButtonVisibility();
     }
   };
   var script = document.createElement('script');
@@ -1099,6 +1123,7 @@ function loadSheetLayerData(layer) {
   script.onerror = function() {
     if (script.parentNode) script.parentNode.removeChild(script);
     delete window[cbName];
+    updateReportButtonVisibility();
     console.warn('[sheet-layer] ' + layer.name + ' script 載入失敗');
   };
   document.head.appendChild(script);
@@ -1121,6 +1146,7 @@ function createSheetLayerButton(layer) {
       if (layer.visible && !layer.sc) buildSheetSupercluster(layer);
       setViewMode(viewMode); // 重新套用目前模式的可見性規則
     }
+    updateReportButtonVisibility();
   });
   document.getElementById('header-layers').appendChild(btn);
 }
@@ -1139,7 +1165,7 @@ function applySheetNames(names) {
       clusterSourceId: 'source-cl-' + sn,
       clusterGlowId: 'layer-cl-glow-' + sn,
       clusterLayerId: 'layer-cl-' + sn,
-      sc: null, visible: false, loaded: false
+      sc: null, visible: false, loaded: false, canReport: false
     };
     sheetLayers.push(layer);
     if (mapLoaded) addSheetLayer(layer);

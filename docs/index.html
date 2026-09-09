@@ -1159,6 +1159,10 @@ function loadSheetList() {
     var tag = document.getElementById('_listSheetsScript');
     if (tag) tag.parentNode.removeChild(tag);
     delete window[cbName];
+    if (resp && resp.success === false) {
+      console.warn('[listSheets] Apps Script 回傳錯誤：', resp.error);
+      return;
+    }
     var names = (resp && resp.sheets) || [];
     console.log('[listSheets] 取得分頁：', names);
     applySheetNames(names);

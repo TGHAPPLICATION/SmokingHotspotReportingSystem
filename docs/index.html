@@ -402,14 +402,11 @@ console.log('[HOTSPOT] cluster-labels-v4');
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
 var SMOKING_ZONE_API = './smoking-zones.json';
-var SHEET_ID = '1MM61acAPR8AG4lE1YStevwkwxaWa_lZd5OvO1hW7F08';
 
-// ── Google Sheets API v4 金鑰（用於自動列出分頁）
-//    在 Google Cloud Console 建立 API key 後填入（限制為 Sheets API 即可）
-//    留空則不自動列出分頁；可用 EXTRA_SHEETS 手動指定
-var SHEETS_API_KEY = 'AIzaSyD5kBAU7ITVSTZeeOEE6Ip9YUb5Fr7UbLM';
+// 分頁清單與各分頁座標資料一律透過 Apps Script Web App（API_URL）代理讀取，
+// 前端不再直接持有試算表 ID 或任何 Google API 金鑰。
 
-// ── 靜態備援：不填 API key 時手動指定額外分頁名稱
+// ── 靜態備援：Apps Script 端點異常時，可手動指定額外分頁名稱
 //    例如：var EXTRA_SHEETS = ['稽查紀錄', '投訴案件'];
 var EXTRA_SHEETS = [];
 var TAIPEI_CENTER = [121.5654, 25.0330];
@@ -1000,42 +997,6 @@ function layerSafeName(str) {
   return 'sl_' + str.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
-// 從 gviz table 擷取座標，支援多種欄位名稱與自動偵測
-function gvizToPoints(table) {
-  var cols = (table.cols || []).map(function(c) { return (c.label || c.id || '').toLowerCase(); });
-  var latIdx = -1, lngIdx = -1;
-  var LAT_KEYS = ['lat','latitude','緯度','y座標','座標y','wgs84緯度','座標-wgs84-y'];
-  var LNG_KEYS = ['lng','longitude','經度','x座標','座標x','wgs84經度','座標-wgs84-x'];
-  cols.forEach(function(c, i) {
-    if (latIdx < 0 && LAT_KEYS.indexOf(c) >= 0) latIdx = i;
-    if (lngIdx < 0 && LNG_KEYS.indexOf(c) >= 0) lngIdx = i;
-  });
-
-  var features = [];
-  (table.rows || []).forEach(function(row) {
-    var c = row.c || [];
-    var lat, lng;
-    if (latIdx >= 0 && lngIdx >= 0) {
-      lat = parseFloat(c[latIdx] && c[latIdx].v);
-      lng = parseFloat(c[lngIdx] && c[lngIdx].v);
-    } else {
-      // 自動掃描台北座標範圍
-      c.forEach(function(cell) {
-        if (!cell || cell.v === null) return;
-        var v = parseFloat(cell.v);
-        if (isNaN(v)) return;
-        if (lat === undefined && v >= 24.9 && v <= 25.3) lat = v;
-        if (lng === undefined && v >= 121.4 && v <= 121.7) lng = v;
-      });
-    }
-    if (isNaN(lat) || isNaN(lng)) return;
-    var props = {};
-    (table.cols || []).forEach(function(col, i) { props[col.label || col.id] = c[i] ? c[i].v : null; });
-    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: props });
-  });
-  return features;
-}
-
 function addSheetLayer(layer) {
   // 個別點位圖層（用於點位模式）
   if (!map.getSource(layer.sourceId)) {
@@ -1108,14 +1069,14 @@ function addSheetLayer(layer) {
 }
 
 function loadSheetLayerData(layer) {
-  var cbName = '_gvizCb_' + layer.safeName;
+  var cbName = '_sheetRowsCb_' + layer.safeName;
   window[cbName] = function(resp) {
-    var tag = document.getElementById('_gviz_' + layer.safeName);
+    var tag = document.getElementById('_sheetRows_' + layer.safeName);
     if (tag) tag.parentNode.removeChild(tag);
     delete window[cbName];
     try {
-      if (resp.status !== 'ok') throw new Error(resp.status);
-      var features = gvizToPoints(resp.table);
+      if (resp.success === false) throw new Error(resp.error);
+      var features = (resp && resp.features) || [];
       layer.features = features;
       layer.loaded = true;
       var countEl = document.getElementById('layer-count-' + layer.safeName);
@@ -1133,9 +1094,8 @@ function loadSheetLayerData(layer) {
     }
   };
   var script = document.createElement('script');
-  script.id  = '_gviz_' + layer.safeName;
-  script.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
-               '/gviz/tq?tqx=responseHandler:' + cbName + '&sheet=' + encodeURIComponent(layer.name);
+  script.id  = '_sheetRows_' + layer.safeName;
+  script.src = API_URL + '?action=getSheetRows&sheet=' + encodeURIComponent(layer.name) + '&callback=' + cbName;
   script.onerror = function() {
     if (script.parentNode) script.parentNode.removeChild(script);
     delete window[cbName];
@@ -1188,26 +1148,30 @@ function applySheetNames(names) {
   // 第一次取得分頁清單後不自動啟用，使用者需手動點選圖層按鈕
 }
 
-// 取得所有分頁名稱：優先用 Sheets API v4，備援用 EXTRA_SHEETS
+// 取得所有分頁名稱：優先透過 Apps Script Web App 代理，備援用 EXTRA_SHEETS
 function loadSheetList() {
   if (EXTRA_SHEETS && EXTRA_SHEETS.length > 0) applySheetNames(EXTRA_SHEETS);
 
-  if (!SHEETS_API_KEY) return;
+  if (!API_URL || API_URL === 'YOUR_APPS_SCRIPT_WEB_APP_URL') return;
 
-  fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID +
-        '?key=' + SHEETS_API_KEY + '&fields=sheets.properties.title')
-    .then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(function(data) {
-      var names = (data.sheets || []).map(function(s) { return s.properties && s.properties.title; }).filter(Boolean);
-      console.log('[listSheets] 取得分頁：', names);
-      applySheetNames(names);
-    })
-    .catch(function(e) {
-      console.warn('[listSheets] Sheets API 失敗 — 請確認 API key 有效並開啟 Sheets API：', e.message);
-    });
+  var cbName = '_listSheetsCb';
+  window[cbName] = function(resp) {
+    var tag = document.getElementById('_listSheetsScript');
+    if (tag) tag.parentNode.removeChild(tag);
+    delete window[cbName];
+    var names = (resp && resp.sheets) || [];
+    console.log('[listSheets] 取得分頁：', names);
+    applySheetNames(names);
+  };
+  var script = document.createElement('script');
+  script.id  = '_listSheetsScript';
+  script.src = API_URL + '?action=listSheets&callback=' + cbName;
+  script.onerror = function() {
+    if (script.parentNode) script.parentNode.removeChild(script);
+    delete window[cbName];
+    console.warn('[listSheets] 載入失敗 — 請確認 Apps Script Web App 已部署且可存取');
+  };
+  document.head.appendChild(script);
 }
 
 // 地圖載入後初始化
@@ -1220,7 +1184,7 @@ map.on('load', function() {
     if (l.visible && !l.loaded) loadSheetLayerData(l);
   });
   loadSheetList();
-  // 定期 retry 直到有 sheet layer 顯示（處理 gviz 非同步時序問題）
+  // 定期 retry 直到有 sheet layer 顯示（處理 Apps Script JSONP 非同步時序問題）
   var retryCount = 0;
   var retryTimer = setInterval(function() {
     retryCount++;

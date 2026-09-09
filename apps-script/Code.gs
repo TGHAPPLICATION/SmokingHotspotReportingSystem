@@ -2,9 +2,12 @@
 // 吸菸熱點通報系統 — Google Apps Script 主程式
 // ============================================================
 
-var SHEET_ID = 'YOUR_GOOGLE_SHEET_ID_HERE';  // ← 部署時替換
-var SHEET_NAME = 'SmokingReports';
-var ALLOWED_ORIGIN = 'https://tghtaipei.github.io';  // GitHub Pages 網域
+// SHEET_ID / SHEET_NAME / ALLOWED_ORIGIN 一律由 Config.gs 的
+// getConfig_() 從「指令碼屬性」讀取，不再寫死於程式碼中。
+
+// ── 動態圖層讀取用的經緯度欄位名稱（不分大小寫比對）───────────
+var LAT_KEYS = ['lat', 'latitude', '緯度', 'y座標', '座標y', 'wgs84緯度', '座標-wgs84-y'];
+var LNG_KEYS = ['lng', 'longitude', '經度', 'x座標', '座標x', 'wgs84經度', '座標-wgs84-x'];
 
 // ── 欄位索引常數 ─────────────────────────────────────────────
 var COL = {
@@ -23,9 +26,9 @@ var COL = {
 function doGet(e) {
   var action = e && e.parameter && e.parameter.action;
 
-  if (action === 'getReports') {
-    return getReportsJson(e);
-  }
+  if (action === 'getReports')  return getReportsJson(e);
+  if (action === 'listSheets')  return listSheetsJson(e);
+  if (action === 'getSheetRows') return getSheetRowsJson(e);
 
   // 回傳表單 HTML
   return HtmlService
@@ -49,8 +52,9 @@ function doPost(e) {
 function saveReport(data) {
   validateReport(data);
 
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = getOrCreateSheet(ss);
+  var cfg = getConfig_();
+  var ss = SpreadsheetApp.openById(cfg.SHEET_ID);
+  var sheet = getOrCreateSheet(ss, cfg.SHEET_NAME);
 
   var now = new Date();
   var id = generateUUID();
@@ -81,8 +85,9 @@ function saveReport(data) {
 function getReportsJson(e) {
   var slot     = e && e.parameter && e.parameter.slot;
   var callback = e && e.parameter && e.parameter.callback; // JSONP support
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = getOrCreateSheet(ss);
+  var cfg = getConfig_();
+  var ss = SpreadsheetApp.openById(cfg.SHEET_ID);
+  var sheet = getOrCreateSheet(ss, cfg.SHEET_NAME);
   var rows = sheet.getDataRange().getValues();
 
   var features = [];
@@ -140,16 +145,89 @@ function hashString(str) {
   }).join('').substring(0, 16);
 }
 
-function getOrCreateSheet(ss) {
-  var sheet = ss.getSheetByName(SHEET_NAME);
+function getOrCreateSheet(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
+    sheet = ss.insertSheet(sheetName);
     sheet.appendRow([
       'id', 'timestamp', 'time_slot', 'lat', 'lng',
       'location_source', 'address_input', 'description', 'reporter_hash'
     ]);
   }
   return sheet;
+}
+
+// ── 動態圖層：列出試算表所有分頁名稱（取代前端直接呼叫 Sheets API）──
+function listSheetsJson(e) {
+  var callback = e && e.parameter && e.parameter.callback;
+  var cfg = getConfig_();
+  var ss = SpreadsheetApp.openById(cfg.SHEET_ID);
+  var names = ss.getSheets().map(function(s) { return s.getName(); });
+  var json = JSON.stringify({ sheets: names });
+
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + '(' + json + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── 動態圖層：讀取指定分頁的座標資料（取代前端直接呼叫 gviz）───
+function getSheetRowsJson(e) {
+  var sheetName = e && e.parameter && e.parameter.sheet;
+  var callback  = e && e.parameter && e.parameter.callback;
+  if (!sheetName) return jsonpErrorResponse_('MISSING_SHEET_PARAM', callback);
+
+  var cfg = getConfig_();
+  var ss = SpreadsheetApp.openById(cfg.SHEET_ID);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return jsonpErrorResponse_('SHEET_NOT_FOUND', callback);
+
+  var values = sheet.getDataRange().getValues();
+  var headers = values.length > 0 ? values[0] : [];
+  var headersLower = headers.map(function(h) { return String(h).toLowerCase(); });
+
+  var latIdx = -1, lngIdx = -1;
+  headersLower.forEach(function(h, i) {
+    if (latIdx < 0 && LAT_KEYS.indexOf(h) >= 0) latIdx = i;
+    if (lngIdx < 0 && LNG_KEYS.indexOf(h) >= 0) lngIdx = i;
+  });
+
+  var features = [];
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var lat, lng;
+    if (latIdx >= 0 && lngIdx >= 0) {
+      lat = parseFloat(row[latIdx]);
+      lng = parseFloat(row[lngIdx]);
+    } else {
+      // 找不到明確的經緯度欄位名稱時，自動掃描台北座標範圍
+      row.forEach(function(v) {
+        var n = parseFloat(v);
+        if (isNaN(n)) return;
+        if (lat === undefined && n >= 24.9 && n <= 25.3) lat = n;
+        if (lng === undefined && n >= 121.4 && n <= 121.7) lng = n;
+      });
+    }
+    if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) continue;
+
+    var props = {};
+    headers.forEach(function(h, i) { props[h] = row[i]; });
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: props
+    });
+  }
+
+  var geojson = JSON.stringify({ type: 'FeatureCollection', features: features });
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + '(' + geojson + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(geojson).setMimeType(ContentService.MimeType.JSON);
 }
 
 function validateReport(data) {
@@ -193,4 +271,15 @@ function buildJsonResponse(obj, statusCode) {
   var output = ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
   return output;
+}
+
+// JSONP 情境下的錯誤回應：即使失敗也要呼叫 callback，前端才能收到並清除暫存的 <script>
+function jsonpErrorResponse_(errorCode, callback) {
+  var json = JSON.stringify({ success: false, error: errorCode });
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + '(' + json + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
 }

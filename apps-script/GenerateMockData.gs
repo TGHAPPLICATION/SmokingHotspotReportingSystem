@@ -97,8 +97,9 @@ function makeRow_(baseDate) {
 
 // ── 主函式：產生測試資料 ──
 function generateMockData() {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = getOrCreateSheet(ss);
+  var cfg   = getConfig_();
+  var ss    = SpreadsheetApp.openById(cfg.SHEET_ID);
+  var sheet = getOrCreateSheet(ss, cfg.SHEET_NAME);
   var baseDate = new Date();
   var rows = [];
 
@@ -128,8 +129,9 @@ function generateMockData() {
 
 // ── 清除所有 mock 資料（reporter_hash 以 mock- 開頭）──
 function clearMockData() {
-  var ss    = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_NAME);
+  var cfg   = getConfig_();
+  var ss    = SpreadsheetApp.openById(cfg.SHEET_ID);
+  var sheet = ss.getSheetByName(cfg.SHEET_NAME);
   if (!sheet) { Logger.log('找不到工作表'); return; }
 
   var data = sheet.getDataRange().getValues();

@@ -9,7 +9,7 @@ var INSPECTION_SHEET_NAME = '環保局菸蒂回報';
 var INSPECTION_HEADERS = [
   'id', 'timestamp', 'time_slot', 'lat', 'lng', 'location_source',
   'address_input', 'description', 'reporter_hash',
-  'district', 'inspector_unit', 'inspector_name', 'photo_url'
+  'district', 'inspector_unit', 'inspector_name', 'photo_url', 'butt_count'
 ];
 var INSPECTION_PHOTO_FOLDER_NAME = '吸菸熱點通報照片';
 
@@ -45,6 +45,16 @@ function saveInspectionReport(data) {
   if (!data.inspectorUnit) throw new Error('MISSING_INSPECTOR_UNIT');
   if (!data.inspectorName) throw new Error('MISSING_INSPECTOR_NAME');
 
+  // 菸蒂數量為選填，但填了就必須是正整數
+  var buttCount = '';
+  if (data.buttCount !== undefined && data.buttCount !== null && String(data.buttCount).trim() !== '') {
+    var buttCountNum = Number(data.buttCount);
+    if (!Number.isInteger(buttCountNum) || buttCountNum <= 0) {
+      throw new Error('INVALID_BUTT_COUNT');
+    }
+    buttCount = buttCountNum;
+  }
+
   var cfg = getConfig_();
   var ss = SpreadsheetApp.openById(cfg.SHEET_ID);
   var sheet = getOrCreateInspectionSheet_(ss);
@@ -72,7 +82,8 @@ function saveInspectionReport(data) {
     data.district,
     data.inspectorUnit,
     data.inspectorName,
-    data.photoUrl || ''
+    data.photoUrl || '',
+    buttCount
   ]);
 
   return { id: id };

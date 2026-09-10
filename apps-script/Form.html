@@ -237,6 +237,37 @@
   }
   .status-msg.success { background: #d4edda; color: #155724; }
   .status-msg.error   { background: #f8d7da; color: #721c24; }
+
+  /* 分頁切換 */
+  .tab-bar {
+    display: flex;
+    background: #f0f4f8;
+    padding: 6px;
+    gap: 6px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px 8px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #777;
+    font-size: .88rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all .2s;
+  }
+  .tab-btn.active { background: #fff; color: #e74c3c; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+
+  .tab-placeholder {
+    text-align: center;
+    padding: 48px 20px;
+    color: #999;
+    font-size: .92rem;
+    line-height: 1.6;
+  }
+  .tab-placeholder .tab-placeholder-icon { font-size: 2rem; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -247,7 +278,19 @@
     <p>稽查人員現場勸導 / 蒐證登錄</p>
   </div>
 
-  <div class="card-body">
+  <div class="tab-bar">
+    <button class="tab-btn" id="tab-btn-butts" onclick="switchTab('butts')">🚬 菸蒂通報</button>
+    <button class="tab-btn" id="tab-btn-patrol" onclick="switchTab('patrol')">🔍 吸菸區巡查</button>
+  </div>
+
+  <div class="card-body" id="tab-content-patrol" style="display:none;">
+    <div class="tab-placeholder">
+      <div class="tab-placeholder-icon">🔧</div>
+      「吸菸區巡查」功能即將推出，敬請期待。
+    </div>
+  </div>
+
+  <div class="card-body" id="tab-content-butts">
 
     <!-- 目前時段 -->
     <div class="timeslot-badge band-1" id="timeslot-badge">
@@ -315,6 +358,13 @@
       </div>
     </div>
 
+    <!-- 菸蒂數量 -->
+    <div class="mb-16">
+      <div class="section-title">菸蒂數量（選填）</div>
+      <input class="text-input" id="butt-count" type="number" min="1" step="1"
+        inputmode="numeric" placeholder="請輸入正整數" oninput="onButtCountInput()">
+    </div>
+
     <!-- 補充說明 -->
     <div class="mb-16">
       <div class="section-title">補充說明（選填）</div>
@@ -348,6 +398,7 @@ var state = {
 };
 
 var PROFILE_KEY = 'smoking_inspector_profile';
+var TAB_STORAGE_KEY = 'smoking_form_active_tab';
 var MAX_PHOTO_DIMENSION = 1600;
 var PHOTO_JPEG_QUALITY = 0.75;
 
@@ -356,7 +407,17 @@ var PHOTO_JPEG_QUALITY = 0.75;
   updateSlotLabel();
   setInterval(updateSlotLabel, 60000);
   loadProfileFromStorage();
+  switchTab(localStorage.getItem(TAB_STORAGE_KEY) || 'butts');
 })();
+
+// ── 分頁切換（菸蒂通報 / 吸菸區巡查）──────────────────────────
+function switchTab(tab) {
+  document.getElementById('tab-content-butts').style.display  = tab === 'butts'  ? 'block' : 'none';
+  document.getElementById('tab-content-patrol').style.display = tab === 'patrol' ? 'block' : 'none';
+  document.getElementById('tab-btn-butts').classList.toggle('active', tab === 'butts');
+  document.getElementById('tab-btn-patrol').classList.toggle('active', tab === 'patrol');
+  localStorage.setItem(TAB_STORAGE_KEY, tab);
+}
 
 function updateSlotLabel() {
   var bands = [
@@ -533,6 +594,13 @@ function removePhoto() {
   document.getElementById('photo-btn-text').textContent = '拍照 / 選擇照片';
 }
 
+// ── 菸蒂數量：僅允許正整數 ────────────────────────────────────
+function onButtCountInput() {
+  var el = document.getElementById('butt-count');
+  var digitsOnly = el.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+  if (digitsOnly !== el.value) el.value = digitsOnly;
+}
+
 // ── 字數計算 ──────────────────────────────────────────────────
 function updateCharCount() {
   var len = document.getElementById('description').value.length;
@@ -589,6 +657,7 @@ function finishSubmit(photoUrl) {
     locationSource: state.locationSource,
     addressInput: document.getElementById('address-input').value.trim(),
     description: document.getElementById('description').value.trim(),
+    buttCount: document.getElementById('butt-count').value.trim(),
     district: document.getElementById('district-select').value,
     inspectorUnit: document.getElementById('inspector-unit').value.trim(),
     inspectorName: document.getElementById('inspector-name').value.trim(),
@@ -610,7 +679,8 @@ function finishSubmit(photoUrl) {
           INVALID_COORDINATES: '位置資料有誤，請重新定位。',
           MISSING_DISTRICT: '請選擇行政區。',
           MISSING_INSPECTOR_UNIT: '請填寫稽查單位。',
-          MISSING_INSPECTOR_NAME: '請填寫稽查人員姓名。'
+          MISSING_INSPECTOR_NAME: '請填寫稽查人員姓名。',
+          INVALID_BUTT_COUNT: '菸蒂數量須為正整數。'
         };
         showMsg(errMsgs[result && result.error] || '送出失敗，請稍後再試。', 'error');
         btn.disabled = false;
@@ -657,6 +727,7 @@ function resetForm() {
   state.locationSource = null;
   document.getElementById('address-input').value = '';
   document.getElementById('description').value = '';
+  document.getElementById('butt-count').value = '';
   document.getElementById('char-count').textContent = '0';
   document.getElementById('map-preview').style.display = 'none';
   setGPSBtnState('', '取得 GPS 定位');

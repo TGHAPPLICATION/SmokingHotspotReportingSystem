@@ -192,6 +192,7 @@
   .popup-addr { color: #e6edf3; margin-bottom: 3px; font-weight: 500; }
   .popup-desc { color: #8b949e; font-size: .76rem; }
   .popup-time { color: #6e7681; font-size: .7rem; margin-top: 5px; }
+  .popup-photo { max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 6px; display: block; object-fit: cover; }
 
   /* ── Loading ── */
   .spinner {
@@ -1032,12 +1033,17 @@ function addSheetLayer(layer) {
       var props = e.features[0].properties;
       var coords = e.features[0].geometry.coordinates.slice();
       var html = '<div style="color:' + layer.color + ';font-size:.72rem;font-weight:700;margin-bottom:5px;">' + esc(layer.name) + '</div>';
+      var photoUrl = props.photo_url;
       Object.keys(props).forEach(function(k) {
         var v = props[k];
+        if (k === 'photo_url') return; // 照片改用 <img> 呈現，不列在文字屬性裡
         if (v !== null && v !== '' && k !== 'lat' && k !== 'lng' && k !== 'latitude' && k !== 'longitude') {
           html += '<div class="popup-desc"><span style="color:#6e7681;">' + esc(k) + '：</span>' + esc(String(v)) + '</div>';
         }
       });
+      if (photoUrl) {
+        html += '<img class="popup-photo" src="' + esc(String(photoUrl)) + '" alt="現場照片">';
+      }
       new maplibregl.Popup({ offset: 10, maxWidth: '240px' }).setLngLat(coords).setHTML(html).addTo(map);
     });
     map.on('mouseenter', layer.layerId, function() { map.getCanvas().style.cursor = 'pointer'; });

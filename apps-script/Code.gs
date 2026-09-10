@@ -28,9 +28,10 @@ function doGet(e) {
   var callback = e && e.parameter && e.parameter.callback;
 
   try {
-    if (action === 'getReports')   return getReportsJson(e);
-    if (action === 'listSheets')   return listSheetsJson(e);
-    if (action === 'getSheetRows') return getSheetRowsJson(e);
+    if (action === 'getReports')        return getReportsJson(e);
+    if (action === 'listSheets')        return listSheetsJson(e);
+    if (action === 'getSheetRows')      return getSheetRowsJson(e);
+    if (action === 'getDesignatedZones') return getDesignatedZoneGeoJson(e);
   } catch (err) {
     // 未包裝的例外（例如 Config.gs 找不到 SHEET_ID）若直接拋出，
     // Apps Script 會回傳錯誤頁面，前端的 <script> JSONP 讀取會被

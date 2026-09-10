@@ -403,7 +403,6 @@
 console.log('[HOTSPOT] cluster-labels-v4');
 var API_URL = 'https://script.google.com/macros/s/AKfycbybrd7nwa_fNo4WWU9kE0t5Oiy5hmRfdfizWqa26InhZXeI0c_nXsvtewhmIufEzdwp/exec';
 var MOCK_URL = './api-mock.json';
-var SMOKING_ZONE_API = './smoking-zones.json';
 
 // 分頁清單與各分頁座標資料一律透過 Apps Script Web App（API_URL）代理讀取，
 // 前端不再直接持有試算表 ID 或任何 Google API 金鑰。
@@ -604,15 +603,14 @@ function initLayers() {
   map.on('click', 'layer-smoking-zones', function(e) {
     var props = e.features[0].properties;
     var coords = e.features[0].geometry.coordinates.slice();
-    new maplibregl.Popup({ offset: 14, maxWidth: '240px' })
-      .setLngLat(coords)
-      .setHTML(
-        '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">🚬 合法吸菸區</div>' +
-        (props.name    ? '<div class="popup-addr">🏷 ' + esc(props.name) + '</div>' : '') +
-        (props.address ? '<div class="popup-desc">📍 ' + esc(props.address) + '</div>' : '') +
-        (props.type    ? '<div class="popup-time" style="color:#6e7681;font-size:.7rem;margin-top:3px;">' + esc(props.type) + '</div>' : '') +
-        (props.hours   ? '<div class="popup-time">⏰ ' + esc(props.hours) + '</div>' : '')
-      ).addTo(map);
+    var html = '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">🚬 合法吸菸區</div>' +
+      (props.location      ? '<div class="popup-addr">🏷 ' + esc(props.location) + '</div>' : '') +
+      (props.address       ? '<div class="popup-desc">📍 ' + esc(props.address) + '</div>' : '') +
+      (props.managing_unit ? '<div class="popup-time" style="color:#6e7681;font-size:.7rem;margin-top:3px;">管理單位：' + esc(props.managing_unit) + '</div>' : '');
+    if (props.photo_url) {
+      html += '<img class="popup-photo" src="' + esc(String(props.photo_url)) + '" alt="最新巡查照片">';
+    }
+    new maplibregl.Popup({ offset: 14, maxWidth: '240px' }).setLngLat(coords).setHTML(html).addTo(map);
   });
 
   map.on('mouseenter', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = 'pointer'; });
@@ -983,26 +981,41 @@ document.getElementById('report-close').addEventListener('click', function() {
   link.href = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') ? API_URL : '#';
 })();
 
-// ── 合法吸菸區 ──────────────────────────────────────────────────
+// ── 合法吸菸區（資料來自「指定吸菸區設定」I 欄地址地理編碼，
+//    透過 Apps Script 代理讀取，見 ZonePatrol.gs 的 getDesignatedZoneGeoJson）──
 function loadSmokingZones() {
   document.getElementById('zone-count').textContent = '';
-  fetch(SMOKING_ZONE_API, { redirect: 'follow' })
-    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function(geojson) {
-      var features = (geojson.features || []).filter(function(f) {
-        var c = f.geometry && f.geometry.coordinates;
-        return c && !isNaN(c[0]) && !isNaN(c[1]);
-      });
-      if (map.getSource('smoking-zones')) {
-        map.getSource('smoking-zones').setData({ type: 'FeatureCollection', features: features });
-      }
-      smokingZoneLoaded = true;
-      document.getElementById('zone-count').textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
-      if (smokingZoneVisible) setSmokingZoneVisibility(true);
-    })
-    .catch(function(err) {
-      console.warn('[smoking-zones] 載入失敗', err);
+
+  var cbName = '_smokingZonesCb';
+  window[cbName] = function(resp) {
+    var tag = document.getElementById('_smokingZonesScript');
+    if (tag) tag.parentNode.removeChild(tag);
+    delete window[cbName];
+
+    if (!resp || resp.success === false) {
+      console.warn('[smoking-zones] 載入失敗', resp && resp.error);
+      return;
+    }
+    var features = (resp.features || []).filter(function(f) {
+      var c = f.geometry && f.geometry.coordinates;
+      return c && !isNaN(c[0]) && !isNaN(c[1]);
     });
+    if (map.getSource('smoking-zones')) {
+      map.getSource('smoking-zones').setData({ type: 'FeatureCollection', features: features });
+    }
+    smokingZoneLoaded = true;
+    document.getElementById('zone-count').textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
+    if (smokingZoneVisible) setSmokingZoneVisibility(true);
+  };
+  var script = document.createElement('script');
+  script.id  = '_smokingZonesScript';
+  script.src = API_URL + '?action=getDesignatedZones&callback=' + cbName;
+  script.onerror = function() {
+    if (script.parentNode) script.parentNode.removeChild(script);
+    delete window[cbName];
+    console.warn('[smoking-zones] script 載入失敗');
+  };
+  document.head.appendChild(script);
 }
 
 function setSmokingZoneVisibility(visible) {

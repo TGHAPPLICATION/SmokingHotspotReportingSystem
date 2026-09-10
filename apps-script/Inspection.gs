@@ -93,7 +93,9 @@ function uploadInspectionPhoto(base64Data, mimeType, filename) {
     var folder = getOrCreateInspectionPhotoFolder_();
     var file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return { success: true, url: 'https://drive.google.com/uc?export=view&id=' + file.getId() };
+    // 用 thumbnail 端點而非 uc?export=view：後者近年對直接 <img> 內嵌的支援不穩定，
+    // thumbnail 端點才是 Google 設計給嵌入使用的網址格式
+    return { success: true, url: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1000' };
   } catch (err) {
     return { success: false, error: err.message };
   }

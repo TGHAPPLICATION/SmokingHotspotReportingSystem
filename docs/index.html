@@ -440,11 +440,20 @@ function updateClusters() {
   var bounds = map.getBounds();
   var zoom = Math.floor(map.getZoom());
   var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+  var highZoomNow = viewMode === 'cluster' && map.getZoom() > 15;
   // 各分頁圖層獨立分群（與 viewMode 無關，由圖層按鈕自行控制）
   sheetLayers.forEach(function(l) {
     if (!l.visible || !l.sc || !map.getSource(l.clusterSourceId)) return;
     var cs = l.sc.getClusters(bbox, zoom);
-    map.getSource(l.clusterSourceId).setData({ type: 'FeatureCollection', features: cs });
+    var clusters = cs.filter(function(f) { return f.properties && f.properties.cluster; });
+    map.getSource(l.clusterSourceId).setData({ type: 'FeatureCollection', features: clusters });
+
+    // 分群模式下，無法形成群組的孤立點改用點位圖層顯示，
+    // 否則資料筆數太少、彼此距離太遠時，地圖上會完全看不到任何東西
+    if (viewMode === 'cluster' && !highZoomNow && map.getSource(l.sourceId)) {
+      var singles = cs.filter(function(f) { return !(f.properties && f.properties.cluster); });
+      map.getSource(l.sourceId).setData({ type: 'FeatureCollection', features: singles });
+    }
   });
   setTimeout(updateClusterLabels, 350);
 }
@@ -620,14 +629,15 @@ function applySheetLayerZoom() {
   sheetLayers.forEach(function(l) {
     if (!l.visible) return;
     var clVis  = highZoom ? 'none' : 'visible';
-    var dotVis = highZoom ? 'visible' : 'none';
+    // 點位圖層在分群模式下一律顯示：highZoom 時顯示全部個別點位，
+    // 否則顯示 updateClusters() 算出來的孤立點（無法形成群組的點）
     if (map.getLayer(l.clusterGlowId))  map.setLayoutProperty(l.clusterGlowId,  'visibility', clVis);
     if (map.getLayer(l.clusterLayerId)) map.setLayoutProperty(l.clusterLayerId, 'visibility', clVis);
     if (map.getLayer(l.layerId)) {
       if (highZoom && l.loaded && map.getSource(l.sourceId)) {
         map.getSource(l.sourceId).setData({ type: 'FeatureCollection', features: l.features || [] });
       }
-      map.setLayoutProperty(l.layerId, 'visibility', dotVis);
+      map.setLayoutProperty(l.layerId, 'visibility', 'visible');
     }
   });
   if (highZoom) clearClusterMarkers();
@@ -702,7 +712,9 @@ function setViewMode(mode) {
   sheetLayers.forEach(function(l) {
     var highZoom = (mode === 'cluster' && map.getZoom && map.getZoom() > 15);
     var clVis  = (mode === 'cluster' && l.visible && !highZoom) ? 'visible' : 'none';
-    var dotVis = ((mode === 'points' || highZoom) && l.visible) ? 'visible' : 'none';
+    // 點位圖層在「點位」與「分群」模式下都要顯示（分群模式用來呈現孤立點），
+    // 只有「熱力」模式才隱藏
+    var dotVis = ((mode === 'points' || mode === 'cluster') && l.visible) ? 'visible' : 'none';
     if (map.getLayer(l.clusterGlowId))  map.setLayoutProperty(l.clusterGlowId,  'visibility', clVis);
     if (map.getLayer(l.clusterLayerId)) map.setLayoutProperty(l.clusterLayerId, 'visibility', clVis);
     if (map.getLayer(l.layerId))        map.setLayoutProperty(l.layerId,         'visibility', dotVis);

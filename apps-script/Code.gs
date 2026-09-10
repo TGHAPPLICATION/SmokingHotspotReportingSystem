@@ -167,12 +167,19 @@ function getOrCreateSheet(ss, sheetName) {
   return sheet;
 }
 
+// 這些分頁是給其他功能內部使用的設定/明細表，不應該出現在地圖 Header
+// 的動態圖層按鈕列（吸菸區巡查會在 getSheetRowsJson 特別轉接，
+// 指定吸菸區設定純粹是供 ZonePatrol.gs 讀取的參考資料）
+var HIDDEN_DYNAMIC_LAYER_SHEETS = ['指定吸菸區設定'];
+
 // ── 動態圖層：列出試算表所有分頁名稱（取代前端直接呼叫 Sheets API）──
 function listSheetsJson(e) {
   var callback = e && e.parameter && e.parameter.callback;
   var cfg = getConfig_();
   var ss = SpreadsheetApp.openById(cfg.SHEET_ID);
-  var names = ss.getSheets().map(function(s) { return s.getName(); });
+  var names = ss.getSheets()
+    .map(function(s) { return s.getName(); })
+    .filter(function(name) { return HIDDEN_DYNAMIC_LAYER_SHEETS.indexOf(name) === -1; });
   var json = JSON.stringify({ sheets: names });
 
   if (callback) {
@@ -188,6 +195,11 @@ function getSheetRowsJson(e) {
   var sheetName = e && e.parameter && e.parameter.sheet;
   var callback  = e && e.parameter && e.parameter.callback;
   if (!sheetName) return jsonpErrorResponse_('MISSING_SHEET_PARAM', callback);
+
+  // 「吸菸區巡查」分頁本身沒有座標欄位（記錄的是巡查結果，不是位置清單），
+  // 地圖上這個圖層改成畫「指定吸菸區設定」I 欄地址地理編碼出來的點位，
+  // 並帶入每個地點最新一筆巡查照片，交給 ZonePatrol.gs 統一處理
+  if (sheetName === ZONE_PATROL_SHEET_NAME) return getDesignatedZoneGeoJson(e);
 
   var cfg = getConfig_();
   var ss = SpreadsheetApp.openById(cfg.SHEET_ID);

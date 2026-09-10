@@ -259,15 +259,6 @@
     transition: all .2s;
   }
   .tab-btn.active { background: #fff; color: #e74c3c; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-
-  .tab-placeholder {
-    text-align: center;
-    padding: 48px 20px;
-    color: #999;
-    font-size: .92rem;
-    line-height: 1.6;
-  }
-  .tab-placeholder .tab-placeholder-icon { font-size: 2rem; margin-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -284,10 +275,56 @@
   </div>
 
   <div class="card-body" id="tab-content-patrol" style="display:none;">
-    <div class="tab-placeholder">
-      <div class="tab-placeholder-icon">🔧</div>
-      「吸菸區巡查」功能即將推出，敬請期待。
+
+    <!-- 巡檢日期時間 -->
+    <div class="timeslot-badge band-1" id="patrol-time-badge">
+      🕐 巡檢時間：<strong id="patrol-time-label">計算中…</strong>
     </div>
+
+    <!-- 指定吸菸區 -->
+    <div class="mb-16">
+      <div class="section-title">指定吸菸區 *</div>
+      <select class="select-input mb-16" id="zone-district-select" onchange="onZoneDistrictChange()">
+        <option value="">請選擇行政區</option>
+      </select>
+      <select class="select-input" id="zone-location-select" onchange="onZoneLocationChange()" disabled>
+        <option value="">請先選擇行政區</option>
+      </select>
+    </div>
+
+    <!-- 管理單位（自動帶入，唯讀）-->
+    <div class="mb-16">
+      <div class="section-title">管理單位</div>
+      <input class="text-input" id="zone-managing-unit" type="text" readonly placeholder="選擇地點後自動帶入">
+    </div>
+
+    <!-- 填報人姓名 -->
+    <div class="mb-16">
+      <div class="section-title">填報人姓名 *</div>
+      <input class="text-input" id="patrol-reporter-name" type="text"
+        placeholder="姓名" oninput="validatePatrolFormReady()">
+    </div>
+
+    <!-- 照片上傳 -->
+    <div class="mb-16">
+      <div class="section-title">現場照片（選填）</div>
+      <button type="button" class="photo-btn" id="patrol-photo-btn" onclick="document.getElementById('patrol-photo-input').click()">
+        📷 <span id="patrol-photo-btn-text">拍照 / 選擇照片</span>
+      </button>
+      <input type="file" id="patrol-photo-input" accept="image/*" capture="environment"
+        style="display:none" onchange="onPatrolPhotoSelected(event)">
+      <div class="photo-preview-wrap" id="patrol-photo-preview-wrap">
+        <img class="photo-preview" id="patrol-photo-preview">
+        <button type="button" class="photo-remove-btn" onclick="removePatrolPhoto()">✕</button>
+      </div>
+    </div>
+
+    <!-- 送出 -->
+    <button class="submit-btn" id="patrol-submit-btn" onclick="submitZonePatrol()" disabled>
+      送出巡查紀錄
+    </button>
+
+    <div class="status-msg" id="patrol-status-msg"></div>
   </div>
 
   <div class="card-body" id="tab-content-butts">
@@ -398,15 +435,27 @@ var state = {
 };
 
 var PROFILE_KEY = 'smoking_inspector_profile';
+var PATROL_PROFILE_KEY = 'smoking_zone_patrol_profile';
 var TAB_STORAGE_KEY = 'smoking_form_active_tab';
 var MAX_PHOTO_DIMENSION = 1600;
 var PHOTO_JPEG_QUALITY = 0.75;
+
+// 吸菸區巡查分頁專用狀態（跟「菸蒂通報」分頁的 state 分開，避免互相干擾）
+var patrolState = {
+  photoBase64: null,
+  photoMimeType: null
+};
+var zoneData = [];       // {district, location, unit}[]，從「指定吸菸區設定」載入
+var zoneDataLoaded = false;
 
 // ── 初始化 ────────────────────────────────────────────────────
 (function init() {
   updateSlotLabel();
   setInterval(updateSlotLabel, 60000);
   loadProfileFromStorage();
+  updatePatrolTimeLabel();
+  setInterval(updatePatrolTimeLabel, 30000);
+  loadPatrolProfileFromStorage();
   switchTab(localStorage.getItem(TAB_STORAGE_KEY) || 'butts');
 })();
 
@@ -417,6 +466,15 @@ function switchTab(tab) {
   document.getElementById('tab-btn-butts').classList.toggle('active', tab === 'butts');
   document.getElementById('tab-btn-patrol').classList.toggle('active', tab === 'patrol');
   localStorage.setItem(TAB_STORAGE_KEY, tab);
+  if (tab === 'patrol') loadDesignatedZones();
+}
+
+function updatePatrolTimeLabel() {
+  var now = new Date();
+  var pad2 = function(n) { return (n < 10 ? '0' : '') + n; };
+  document.getElementById('patrol-time-label').textContent =
+    now.getFullYear() + '/' + pad2(now.getMonth() + 1) + '/' + pad2(now.getDate()) +
+    ' ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
 }
 
 function updateSlotLabel() {
@@ -556,13 +614,9 @@ function setLocation(lat, lng, source) {
   setTimeout(function() { state.map.invalidateSize(); }, 100);
 }
 
-// ── 照片選取 & 用戶端壓縮 ─────────────────────────────────────
-function onPhotoSelected(event) {
-  var file = event.target.files && event.target.files[0];
-  if (!file) return;
-
-  document.getElementById('photo-btn-text').textContent = '處理照片中…';
-
+// ── 照片選取 & 用戶端壓縮（菸蒂通報／吸菸區巡查共用同一套壓縮邏輯）──
+// callback(dataUrl)：dataUrl 為完整的 data:image/jpeg;base64,... 字串
+function compressImageFile(file, callback) {
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = new Image();
@@ -572,18 +626,24 @@ function onPhotoSelected(event) {
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-
-      var dataUrl = canvas.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY);
-      state.photoBase64 = dataUrl.split(',')[1];
-      state.photoMimeType = 'image/jpeg';
-
-      document.getElementById('photo-preview').src = dataUrl;
-      document.getElementById('photo-preview-wrap').style.display = 'block';
-      document.getElementById('photo-btn-text').textContent = '重新選擇照片';
+      callback(canvas.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY));
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+function onPhotoSelected(event) {
+  var file = event.target.files && event.target.files[0];
+  if (!file) return;
+  document.getElementById('photo-btn-text').textContent = '處理照片中…';
+  compressImageFile(file, function(dataUrl) {
+    state.photoBase64 = dataUrl.split(',')[1];
+    state.photoMimeType = 'image/jpeg';
+    document.getElementById('photo-preview').src = dataUrl;
+    document.getElementById('photo-preview-wrap').style.display = 'block';
+    document.getElementById('photo-btn-text').textContent = '重新選擇照片';
+  });
 }
 
 function removePhoto() {
@@ -592,6 +652,201 @@ function removePhoto() {
   document.getElementById('photo-input').value = '';
   document.getElementById('photo-preview-wrap').style.display = 'none';
   document.getElementById('photo-btn-text').textContent = '拍照 / 選擇照片';
+}
+
+// ── 吸菸區巡查：指定吸菸區下拉選單（行政區 → 地點 → 自動帶入管理單位）──
+function loadDesignatedZones() {
+  if (zoneDataLoaded) return;
+  var districtSelect = document.getElementById('zone-district-select');
+  districtSelect.disabled = true;
+  google.script.run
+    .withSuccessHandler(function(result) {
+      districtSelect.disabled = false;
+      if (!result || !result.success) {
+        showPatrolMsg('無法載入指定吸菸區清單，請稍後再試。', 'error');
+        return;
+      }
+      zoneData = result.zones || [];
+      zoneDataLoaded = true;
+      var districts = [];
+      zoneData.forEach(function(z) {
+        if (districts.indexOf(z.district) === -1) districts.push(z.district);
+      });
+      districts.forEach(function(d) {
+        var opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        districtSelect.appendChild(opt);
+      });
+    })
+    .withFailureHandler(function() {
+      districtSelect.disabled = false;
+      showPatrolMsg('網路錯誤，無法載入指定吸菸區清單。', 'error');
+    })
+    .getDesignatedSmokingZones();
+}
+
+function onZoneDistrictChange() {
+  var district = document.getElementById('zone-district-select').value;
+  var locationSelect = document.getElementById('zone-location-select');
+  locationSelect.innerHTML = '<option value="">請選擇地點</option>';
+  document.getElementById('zone-managing-unit').value = '';
+  locationSelect.disabled = !district;
+  if (district) {
+    zoneData.filter(function(z) { return z.district === district; }).forEach(function(z) {
+      var opt = document.createElement('option');
+      opt.value = z.location;
+      opt.textContent = z.location;
+      locationSelect.appendChild(opt);
+    });
+  }
+  validatePatrolFormReady();
+}
+
+function onZoneLocationChange() {
+  var district = document.getElementById('zone-district-select').value;
+  var location = document.getElementById('zone-location-select').value;
+  var match = zoneData.filter(function(z) { return z.district === district && z.location === location; })[0];
+  document.getElementById('zone-managing-unit').value = match ? match.unit : '';
+  validatePatrolFormReady();
+}
+
+function validatePatrolFormReady() {
+  var hasDistrict = document.getElementById('zone-district-select').value.length > 0;
+  var hasLocation = document.getElementById('zone-location-select').value.length > 0;
+  var hasUnit = document.getElementById('zone-managing-unit').value.length > 0;
+  var hasName = document.getElementById('patrol-reporter-name').value.trim().length > 0;
+  document.getElementById('patrol-submit-btn').disabled = !(hasDistrict && hasLocation && hasUnit && hasName);
+}
+
+// ── 吸菸區巡查：填報人姓名預設值（LocalStorage）────────────────
+function loadPatrolProfileFromStorage() {
+  var raw = localStorage.getItem(PATROL_PROFILE_KEY);
+  if (!raw) return;
+  try {
+    var profile = JSON.parse(raw);
+    if (profile.reporterName) document.getElementById('patrol-reporter-name').value = profile.reporterName;
+  } catch (e) { /* 忽略壞掉的舊資料 */ }
+}
+
+function savePatrolProfileToStorage() {
+  localStorage.setItem(PATROL_PROFILE_KEY, JSON.stringify({
+    reporterName: document.getElementById('patrol-reporter-name').value.trim()
+  }));
+}
+
+// ── 吸菸區巡查：照片選取（與菸蒂通報共用 compressImageFile）─────
+function onPatrolPhotoSelected(event) {
+  var file = event.target.files && event.target.files[0];
+  if (!file) return;
+  document.getElementById('patrol-photo-btn-text').textContent = '處理照片中…';
+  compressImageFile(file, function(dataUrl) {
+    patrolState.photoBase64 = dataUrl.split(',')[1];
+    patrolState.photoMimeType = 'image/jpeg';
+    document.getElementById('patrol-photo-preview').src = dataUrl;
+    document.getElementById('patrol-photo-preview-wrap').style.display = 'block';
+    document.getElementById('patrol-photo-btn-text').textContent = '重新選擇照片';
+  });
+}
+
+function removePatrolPhoto() {
+  patrolState.photoBase64 = null;
+  patrolState.photoMimeType = null;
+  document.getElementById('patrol-photo-input').value = '';
+  document.getElementById('patrol-photo-preview-wrap').style.display = 'none';
+  document.getElementById('patrol-photo-btn-text').textContent = '拍照 / 選擇照片';
+}
+
+// ── 吸菸區巡查：送出表單 ──────────────────────────────────────
+function submitZonePatrol() {
+  var btn = document.getElementById('patrol-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '送出中…';
+  hidePatrolMsg();
+
+  if (patrolState.photoBase64) {
+    btn.textContent = '上傳照片中…';
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result && result.success) {
+          finishZonePatrolSubmit(result.url);
+        } else {
+          btn.disabled = false;
+          btn.textContent = '送出巡查紀錄';
+          if (confirm('照片上傳失敗（' + (result && result.error) + '），是否要不含照片直接送出？')) {
+            finishZonePatrolSubmit('');
+          }
+        }
+      })
+      .withFailureHandler(function() {
+        btn.disabled = false;
+        btn.textContent = '送出巡查紀錄';
+        if (confirm('照片上傳失敗，是否要不含照片直接送出？')) {
+          finishZonePatrolSubmit('');
+        }
+      })
+      .uploadInspectionPhoto(patrolState.photoBase64, patrolState.photoMimeType, 'patrol_' + Date.now() + '.jpg');
+  } else {
+    finishZonePatrolSubmit('');
+  }
+}
+
+function finishZonePatrolSubmit(photoUrl) {
+  var btn = document.getElementById('patrol-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '送出中…';
+
+  var payload = {
+    district: document.getElementById('zone-district-select').value,
+    location: document.getElementById('zone-location-select').value,
+    managingUnit: document.getElementById('zone-managing-unit').value,
+    reporterName: document.getElementById('patrol-reporter-name').value.trim(),
+    photoUrl: photoUrl || ''
+  };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      btn.textContent = '送出巡查紀錄';
+      if (result && result.success) {
+        savePatrolProfileToStorage();
+        showPatrolMsg('✅ 巡查紀錄已送出！', 'success');
+        resetPatrolForm();
+      } else {
+        var errMsgs = {
+          MISSING_DISTRICT: '請選擇行政區。',
+          MISSING_LOCATION: '請選擇地點。',
+          MISSING_MANAGING_UNIT: '管理單位資料異常，請重新選擇地點。',
+          MISSING_REPORTER_NAME: '請填寫填報人姓名。'
+        };
+        showPatrolMsg(errMsgs[result && result.error] || '送出失敗，請稍後再試。', 'error');
+        btn.disabled = false;
+      }
+    })
+    .withFailureHandler(function() {
+      btn.textContent = '送出巡查紀錄';
+      btn.disabled = false;
+      showPatrolMsg('網路錯誤，請稍後再試。', 'error');
+    })
+    .processZonePatrolData(payload);
+}
+
+function showPatrolMsg(text, type) {
+  var el = document.getElementById('patrol-status-msg');
+  el.textContent = text;
+  el.className = 'status-msg ' + type;
+  el.style.display = 'block';
+}
+function hidePatrolMsg() {
+  document.getElementById('patrol-status-msg').style.display = 'none';
+}
+
+function resetPatrolForm() {
+  document.getElementById('zone-district-select').value = '';
+  document.getElementById('zone-location-select').innerHTML = '<option value="">請先選擇行政區</option>';
+  document.getElementById('zone-location-select').disabled = true;
+  document.getElementById('zone-managing-unit').value = '';
+  removePatrolPhoto();
+  validatePatrolFormReady();
 }
 
 // ── 菸蒂數量：僅允許正整數 ────────────────────────────────────

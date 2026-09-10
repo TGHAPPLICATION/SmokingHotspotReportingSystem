@@ -126,8 +126,9 @@
 │   ├── Code.gs                 # 主程式（API、去重、驗證、動態圖層讀取，doPost 寫入 SmokingReports）
 │   ├── Config.gs               # 設定值管理（讀取 Script Properties，不寫死金鑰/ID）
 │   ├── Inspection.gs           # 稽查通報後端（環保局菸蒂回報分頁讀寫、Drive 照片上傳）
+│   ├── ZonePatrol.gs           # 吸菸區巡查後端（讀取指定吸菸區設定、寫入吸菸區巡查分頁）
 │   ├── GenerateMockData.gs     # 測試資料產生器（10,000 筆，含清除功能）
-│   ├── Form.html               # 稽查通報表單（分頁：菸蒂通報／吸菸區巡查〔即將推出〕）
+│   ├── Form.html               # 稽查通報表單（分頁：菸蒂通報／吸菸區巡查）
 │   ├── processFormData.gs      # HTML Service 表單資料橋接（呼叫 Inspection.gs）/ 地址地理編碼
 │   └── appsscript.json         # Apps Script 專案設定
 ├── .github/workflows/
@@ -172,6 +173,35 @@
 
 > 這張工作表記錄的是**內部稽查人員**的登錄資料（含真實姓名、單位），跟上方 `SmokingReports` 給一般民眾匿名通報的設計不同，兩者刻意分開存放、互不影響。若這張分頁原本沒有標題列（例如舊資料直接匯入），`Inspection.gs` 的 `getOrCreateInspectionSheet_()` 第一次寫入時會自動補上標題列，不需要手動到 Google Sheets 編輯。
 
+### 指定吸菸區設定工作表（既有資料，僅供讀取）
+
+工作表名稱固定為 `指定吸菸區設定`（寫死在 `ZonePatrol.gs`），這張表**不是本系統建立或寫入的**，是既有的管理資料，`ZonePatrol.gs` 只會讀取，不會修改。「吸菸區巡查」表單只讀取固定的 3 欄：
+
+| 欄位位置 | 說明 |
+|---|---|
+| G 欄 | 行政區（下拉選單第一層） |
+| H 欄 | 地點（下拉選單第二層，依行政區篩選） |
+| J 欄 | 管理單位（選定地點後自動帶入，表單唯讀） |
+
+> 這 3 欄用**欄位位置**（G/H/J）讀取而非欄位名稱比對，若這張表的欄位順序調整過，`ZonePatrol.gs` 的 `getDesignatedSmokingZones()` 要跟著改。
+
+### 吸菸區巡查工作表（吸菸區巡查表單專用）
+
+工作表名稱固定為 `吸菸區巡查`（寫死在 `ZonePatrol.gs`），分頁不存在或缺標題列時，`getOrCreateZonePatrolSheet_()` 會自動建立／補上標題列，機制與 `環保局菸蒂回報` 相同：
+
+| # | 欄位 | 型別 | 說明 |
+|---|------|------|------|
+| 1 | id | STRING | UUID |
+| 2 | timestamp | DATETIME | 巡查時間（伺服器端產生，ISO 8601） |
+| 3 | time_slot | INTEGER | 時段 0–11 |
+| 4 | district | STRING | 行政區（來自指定吸菸區設定 G 欄） |
+| 5 | location | STRING | 地點（來自指定吸菸區設定 H 欄） |
+| 6 | managing_unit | STRING | 管理單位（來自指定吸菸區設定 J 欄，自動帶入） |
+| 7 | reporter_name | STRING | 填報人姓名（表單必填） |
+| 8 | photo_url | STRING | 現場照片的 Google Drive 公開檢視連結，無照片則空白 |
+
+> 這張表沒有經緯度欄位，即使會自動出現在地圖 Header 的動態圖層清單裡，也不會顯示任何點位（見〈已知限制〉），純粹作為巡查紀錄的資料庫用途，不影響地圖顯示。
+
 ### 其他動態圖層分頁（選用）
 
 同一份試算表底下可自由新增其他分頁（例如稽查單位自建的 Excel 匯入資料），會自動出現在地圖 Header 成為獨立圖層，欄位格式不需要與上表一致——只要有一欄能被判定為緯度、一欄能被判定為經度即可（見〈多分頁動態圖層〉）。
@@ -189,7 +219,7 @@
 
 1. 開啟 [Google Apps Script](https://script.google.com) 建立新專案
 2. 複製以下檔案至對應 `.gs` / `.html`：
-   - `Code.gs`、`Config.gs`、`Inspection.gs`、`GenerateMockData.gs`、`Form.html`、`processFormData.gs`、`appsscript.json`
+   - `Code.gs`、`Config.gs`、`Inspection.gs`、`ZonePatrol.gs`、`GenerateMockData.gs`、`Form.html`、`processFormData.gs`、`appsscript.json`
 3. **設定專案設定 → 指令碼屬性**（不要把 ID 寫進程式碼）：
    | 屬性名稱 | 必填 | 值 |
    |---|---|---|

@@ -262,12 +262,8 @@
     <div class="header-icon">🚭</div>
     <h1>台北市吸菸熱點地圖</h1>
   </div>
-  <!-- 圖層切換列（合法吸菸區在最前，動態分頁依序排列） -->
-  <div class="header-layers" id="header-layers">
-    <button class="layer-btn" id="zone-toggle-btn" style="--lc:#27ae60" title="顯示／隱藏合法吸菸區">
-      <span class="layer-dot"></span>合法吸菸區<span class="layer-count" id="zone-count"></span>
-    </button>
-  </div>
+  <!-- 圖層切換列（依動態分頁清單依序排列，見 applySheetNames） -->
+  <div class="header-layers" id="header-layers"></div>
   <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
     <button class="analytics-btn hidden" id="analytics-btn">📊 成效報表</button>
     <a class="report-btn" id="report-link" href="#" target="_blank">📍 通報</a>
@@ -424,8 +420,6 @@ var viewMode = 'cluster';
 var map;
 
 var mapLoaded = false;
-var smokingZoneVisible = false;
-var smokingZoneLoaded = false;
 
 function buildSheetSupercluster(layer) {
   try {
@@ -533,88 +527,6 @@ function initLayers() {
       'heatmap-opacity': 0.85
     }
   });
-
-  // ── 合法吸菸區圖層 ──
-  // 繪製 Google Maps 風格水滴錨點（不使用 emoji，避免字型 404）
-  (function() {
-    var w = 22, h = 32, sc = 2; // sc = pixel ratio for retina
-    var canvas = document.createElement('canvas');
-    canvas.width = w * sc; canvas.height = h * sc;
-    var ctx = canvas.getContext('2d');
-    ctx.scale(sc, sc);
-
-    var cx = w / 2, cr = w / 2 - 2, cy = cr + 2;
-
-    // 陰影
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = 3; ctx.shadowOffsetY = 1.5;
-
-    // 水滴主體
-    ctx.beginPath();
-    ctx.moveTo(cx, h - 2);
-    ctx.bezierCurveTo(cx - 3, h * 0.64, cx - cr - 1, cy + cr * 0.75, cx - cr - 1, cy);
-    ctx.arc(cx, cy, cr + 1, Math.PI, 0, false);
-    ctx.bezierCurveTo(cx + cr + 1, cy + cr * 0.75, cx + 3, h * 0.64, cx, h - 2);
-    ctx.closePath();
-    ctx.fillStyle = '#e74c3c';
-    ctx.fill();
-
-    // 消除陰影後畫白色內圓
-    ctx.shadowColor = 'transparent';
-    ctx.beginPath();
-    ctx.arc(cx, cy, cr * 0.42, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fill();
-
-    map.addImage('zone-pin', ctx.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio: sc });
-  })();
-
-  map.addSource('smoking-zones', {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] }
-  });
-
-  // 外光暈（hover 感）
-  map.addLayer({
-    id: 'layer-smoking-zones-halo', type: 'circle', source: 'smoking-zones',
-    layout: { visibility: 'none' },
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 16],
-      'circle-color': 'rgba(231,76,60,0)',
-      'circle-stroke-color': 'rgba(231,76,60,0.2)',
-      'circle-stroke-width': 5,
-      'circle-blur': 0.6
-    }
-  });
-
-  // 水滴錨點 symbol 圖層
-  map.addLayer({
-    id: 'layer-smoking-zones', type: 'symbol', source: 'smoking-zones',
-    layout: {
-      visibility: 'none',
-      'icon-image': 'zone-pin',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 13, 0.75, 16, 1.1],
-      'icon-anchor': 'bottom',
-      'icon-allow-overlap': true,
-      'icon-ignore-placement': true
-    }
-  });
-
-  map.on('click', 'layer-smoking-zones', function(e) {
-    var props = e.features[0].properties;
-    var coords = e.features[0].geometry.coordinates.slice();
-    var html = '<div style="color:#2ecc71;font-size:.72rem;font-weight:700;margin-bottom:4px;">🚬 合法吸菸區</div>' +
-      (props.location      ? '<div class="popup-addr">🏷 ' + esc(props.location) + '</div>' : '') +
-      (props.address       ? '<div class="popup-desc">📍 ' + esc(props.address) + '</div>' : '') +
-      (props.managing_unit ? '<div class="popup-time" style="color:#6e7681;font-size:.7rem;margin-top:3px;">管理單位：' + esc(props.managing_unit) + '</div>' : '');
-    if (props.photo_url) {
-      html += '<img class="popup-photo" src="' + esc(String(props.photo_url)) + '" alt="最新巡查照片">';
-    }
-    new maplibregl.Popup({ offset: 14, maxWidth: '240px' }).setLngLat(coords).setHTML(html).addTo(map);
-  });
-
-  map.on('mouseenter', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = 'pointer'; });
-  map.on('mouseleave', 'layer-smoking-zones', function() { map.getCanvas().style.cursor = ''; });
 
   map.on('moveend', function() { updateClusters(); applySheetLayerZoom(); });
   map.on('zoomend', function() { updateClusters(); applySheetLayerZoom(); });
@@ -981,56 +893,6 @@ document.getElementById('report-close').addEventListener('click', function() {
   link.href = (API_URL && API_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL') ? API_URL : '#';
 })();
 
-// ── 合法吸菸區（資料來自「指定吸菸區設定」I 欄地址地理編碼，
-//    透過 Apps Script 代理讀取，見 ZonePatrol.gs 的 getDesignatedZoneGeoJson）──
-function loadSmokingZones() {
-  document.getElementById('zone-count').textContent = '';
-
-  var cbName = '_smokingZonesCb';
-  window[cbName] = function(resp) {
-    var tag = document.getElementById('_smokingZonesScript');
-    if (tag) tag.parentNode.removeChild(tag);
-    delete window[cbName];
-
-    if (!resp || resp.success === false) {
-      console.warn('[smoking-zones] 載入失敗', resp && resp.error);
-      return;
-    }
-    var features = (resp.features || []).filter(function(f) {
-      var c = f.geometry && f.geometry.coordinates;
-      return c && !isNaN(c[0]) && !isNaN(c[1]);
-    });
-    if (map.getSource('smoking-zones')) {
-      map.getSource('smoking-zones').setData({ type: 'FeatureCollection', features: features });
-    }
-    smokingZoneLoaded = true;
-    document.getElementById('zone-count').textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
-    if (smokingZoneVisible) setSmokingZoneVisibility(true);
-  };
-  var script = document.createElement('script');
-  script.id  = '_smokingZonesScript';
-  script.src = API_URL + '?action=getDesignatedZones&callback=' + cbName;
-  script.onerror = function() {
-    if (script.parentNode) script.parentNode.removeChild(script);
-    delete window[cbName];
-    console.warn('[smoking-zones] script 載入失敗');
-  };
-  document.head.appendChild(script);
-}
-
-function setSmokingZoneVisibility(visible) {
-  ['layer-smoking-zones-halo', 'layer-smoking-zones'].forEach(function(id) {
-    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
-  });
-  document.getElementById('zone-toggle-btn').classList.toggle('active', visible);
-}
-
-document.getElementById('zone-toggle-btn').addEventListener('click', function() {
-  smokingZoneVisible = !smokingZoneVisible;
-  setSmokingZoneVisibility(smokingZoneVisible);
-  if (smokingZoneVisible && !smokingZoneLoaded) loadSmokingZones();
-});
-
 // ── 動態分頁圖層管理器 ──────────────────────────────────────────
 var LAYER_PALETTE = ['#8b5cf6','#f59e0b','#3b82f6','#ec4899','#06b6d4','#ef4444','#14b8a6'];
 var sheetLayers = [];
@@ -1239,7 +1101,6 @@ function loadSheetList() {
 map.on('load', function() {
   mapLoaded = true;
   setViewMode('cluster'); // 預設分群模式，同步按鈕高亮
-  loadSmokingZones();
   sheetLayers.forEach(function(l) {
     addSheetLayer(l);
     if (l.visible && !l.loaded) loadSheetLayerData(l);

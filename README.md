@@ -26,12 +26,14 @@
        └──[查看地圖] GitHub Pages (docs/index.html)
                      │
                      └── Apps Script Web App
-                           ?action=listSheets        → 回傳分頁清單
-                           ?action=getSheetRows      → 回傳指定分頁座標 GeoJSON
-                           ?action=getDesignatedZones → 合法吸菸區 GeoJSON
-                             （讀「指定吸菸區設定」I 欄地址，地理編碼後
-                              快取在指令碼屬性；並帶入該地點在「吸菸區
-                              巡查」分頁最新一筆照片）
+                           ?action=listSheets   → 回傳分頁清單（排除
+                                                   指定吸菸區設定，見下）
+                           ?action=getSheetRows → 回傳指定分頁座標 GeoJSON
+                             sheet=吸菸區巡查 這個分頁比較特別：改讀
+                             「指定吸菸區設定」I 欄地址地理編碼成座標
+                             （結果快取在指令碼屬性），並帶入每個地點
+                             在「吸菸區巡查」分頁最新一筆照片；其他
+                             分頁維持一般的座標欄位自動偵測
                          （前端不持有試算表 ID 或任何 Google API 金鑰，
                           一律透過 JSONP 向自家 Apps Script 拿資料）
 ```
@@ -44,7 +46,7 @@
 | 資料庫 | Google Sheets（ID 存於 Apps Script 指令碼屬性，非公開） |
 | 後端 API（寫入 / 讀取） | Apps Script Web App（doPost 寫入；doGet 以 JSONP 提供 `getReports`／`listSheets`／`getSheetRows`） |
 | 設定管理 | Apps Script Script Properties（`Config.gs`），程式碼中不含任何金鑰或試算表 ID |
-| 合法吸菸區資料 | 讀「指定吸菸區設定」分頁地址，Apps Script 地理編碼後即時提供（`ZonePatrol.gs`） |
+| 吸菸區巡查地圖圖層 | 讀「指定吸菸區設定」分頁地址，Apps Script 地理編碼後即時提供（`ZonePatrol.gs`） |
 | 地圖前端 | GitHub Pages + MapLibre GL JS 4.3.2 |
 | 分群演算法 | supercluster 8.0.1（JS 端手動計算） |
 | 圖表報表 | Chart.js 4.4.3 |
@@ -65,22 +67,15 @@
 | 🔥 熱力 | WebGL heatmap，密度梯度呈現空間分布 |
 | ⚪ 點位 | 所有個別點位，依時段 4 色顯示 |
 
-### 合法吸菸區標記
-
-- 左側面板提供「合法吸菸區」開關，顯示「指定吸菸區設定」分頁登記的地點
-- 以紅色水滴錨點標記，可與回報熱點疊加比對
-- 資料來源：`指定吸菸區設定` 分頁的 I 欄地址，由 Apps Script（`Maps.newGeocoder()`，免費、無需 API Key）即時地理編碼成座標；結果快取在指令碼屬性（`ZONE_GEOCODE_CACHE`），同一地址不會重複查詢
-- 點擊點位會顯示地點、地址、管理單位，若「吸菸區巡查」分頁有該地點的巡查照片，會一併顯示最新一張縮圖
-
-> ⚠️ 舊版資料來源（`docs/smoking-zones.json` + `.github/workflows/update-smoking-zones.yml` 每日從台北市開放資料下載）已經**不再被地圖使用**，但檔案本身還留著沒有刪除，作為復原用的備份。如果確定不需要了，可以之後再請人清除。
-
 ### 多分頁動態圖層
 
-- Header 會自動列出試算表中「每一個分頁」，各自變成一個可獨立開關的圖層按鈕（不同顏色區分）
+- Header 會自動列出試算表中「每一個分頁」，各自變成一個可獨立開關的圖層按鈕（不同顏色區分）——**除了 `指定吸菸區設定`**，這張表純粹是給後端讀取的參考資料，`listSheetsJson()` 會把它從清單裡排除，不會出現在按鈕列
 - 每個分頁各自獨立分群、獨立計數，可同時開啟多個分頁比對
 - 座標欄位採自動偵測：優先比對常見欄位名稱（`lat`/`緯度`/`經度`…），找不到時自動掃描台北座標範圍內的數值欄位，因此可直接沿用衛生局、環保局等單位既有的 Excel／表單格式，不需要改造成固定的九欄格式
 - 資料一律由 Apps Script Web App 代理讀取（見〈系統架構〉），試算表本身不需要公開分享
 - 若點位的 `photo_url` 欄位有值，放大到「點位模式」（分群失效、顯示個別點位時）點擊該點位，彈出視窗會直接顯示現場照片，不會跟其他文字屬性混在一起列出
+
+**「吸菸區巡查」是特例圖層**：這個分頁本身記錄的是巡查結果（沒有座標），但它的按鈕點下去，地圖畫的是「指定吸菸區設定」I 欄地址地理編碼出來的座標點（見〈系統架構〉），並自動帶入該地點在「吸菸區巡查」分頁最新一筆的巡查照片——所以點擊這個圖層的點位，看到的是「這個指定吸菸區、最近一次巡查拍的照片」，而不是巡查紀錄本身的清單。
 
 ### 篩選功能
 
@@ -122,19 +117,16 @@
 ```
 ├── docs/
 │   ├── index.html              # 統計熱點地圖（MapLibre GL + supercluster + Chart.js）
-│   ├── smoking-zones.json      # 台北市合法吸菸區 GeoJSON（GitHub Actions 每日更新）
 │   └── api-mock.json           # 本機示範資料（10,000 筆）
 ├── apps-script/
 │   ├── Code.gs                 # 主程式（API、去重、驗證、動態圖層讀取，doPost 寫入 SmokingReports）
 │   ├── Config.gs               # 設定值管理（讀取 Script Properties，不寫死金鑰/ID）
 │   ├── Inspection.gs           # 稽查通報後端（環保局菸蒂回報分頁讀寫、Drive 照片上傳）
-│   ├── ZonePatrol.gs           # 吸菸區巡查後端 + 地圖合法吸菸區資料（地址地理編碼、快取）
+│   ├── ZonePatrol.gs           # 吸菸區巡查後端 + 地圖圖層資料（地址地理編碼、快取）
 │   ├── GenerateMockData.gs     # 測試資料產生器（10,000 筆，含清除功能）
 │   ├── Form.html               # 稽查通報表單（分頁：菸蒂通報／吸菸區巡查）
 │   ├── processFormData.gs      # HTML Service 表單資料橋接（呼叫 Inspection.gs）/ 地址地理編碼
 │   └── appsscript.json         # Apps Script 專案設定
-├── .github/workflows/
-│   └── update-smoking-zones.yml  # 合法吸菸區資料每日自動更新 workflow
 ├── design/
 │   └── system-design.md        # 系統設計規劃文件
 └── README.md
@@ -183,7 +175,7 @@
 |---|---|---|
 | G 欄 | 行政區 | 稽查表單下拉選單第一層；地圖點位屬性 |
 | H 欄 | 地點 | 稽查表單下拉選單第二層（依行政區篩選）；地圖點位屬性 |
-| I 欄 | 地址 | 地圖「合法吸菸區」點位的座標來源，由 Apps Script 地理編碼 |
+| I 欄 | 地址 | 地圖「吸菸區巡查」圖層的座標來源，由 Apps Script 地理編碼 |
 | J 欄 | 管理單位 | 稽查表單選定地點後自動帶入（唯讀）；地圖點位屬性 |
 
 > 這 4 欄用**欄位位置**（G/H/I/J）讀取而非欄位名稱比對，若這張表的欄位順序調整過，`ZonePatrol.gs` 的 `getDesignatedSmokingZones()` 和 `getDesignatedZoneGeoJson()` 都要跟著改。
@@ -203,7 +195,7 @@
 | 7 | reporter_name | STRING | 填報人姓名（表單必填） |
 | 8 | photo_url | STRING | 現場照片的 Google Drive 公開檢視連結，無照片則空白 |
 
-> 這張表沒有經緯度欄位，即使會自動出現在地圖 Header 的動態圖層清單裡，也不會顯示任何點位（見〈已知限制〉），純粹作為巡查紀錄的資料庫用途，不影響地圖顯示。
+> 這張表本身沒有經緯度欄位，但地圖 Header 的「吸菸區巡查」按鈕**不是**直接讀這張表的座標——`Code.gs` 的 `getSheetRowsJson()` 對這個分頁名稱做了特殊轉接，改成畫「指定吸菸區設定」的地址點位，並從這張表撈每個地點最新一筆照片附上去（見〈多分頁動態圖層〉的「吸菸區巡查是特例圖層」說明）。
 
 ### 其他動態圖層分頁（選用）
 
@@ -238,7 +230,7 @@
 
 > **首次加入照片上傳功能時**：因為 `Inspection.gs` 用到 `DriveApp`，存檔或執行時 Apps Script 會跳出「這個應用程式需要存取你的 Google 雲端硬碟」的授權畫面，需要部署者本人手動點「允許」一次，這步驟無法代為執行。之後每次部署新版本都不會再跳出（除非撤銷授權）。
 
-> **首次啟用合法吸菸區地圖圖層時**：`ZonePatrol.gs` 用到 `Maps.newGeocoder()`，同樣需要手動同意一次地圖服務的授權畫面。建議部署後先到 Apps Script 編輯器手動執行一次 `warmZoneGeocodeCache()`，把「指定吸菸區設定」裡所有地址一次地理編碼完並寫入快取，避免第一位打開地圖的使用者剛好遇到大量地址同時查詢、doGet 執行時間過長逾時。之後只有新增的地址才需要重新查詢。
+> **首次啟用「吸菸區巡查」地圖圖層時**：`ZonePatrol.gs` 用到 `Maps.newGeocoder()`，同樣需要手動同意一次地圖服務的授權畫面。建議部署後先到 Apps Script 編輯器手動執行一次 `warmZoneGeocodeCache()`，把「指定吸菸區設定」裡所有地址一次地理編碼完並寫入快取，避免第一位打開地圖的使用者剛好遇到大量地址同時查詢、doGet 執行時間過長逾時。之後只有新增的地址才需要重新查詢。
 
 ### 三、GitHub Pages 設定
 
@@ -248,16 +240,7 @@
 
 > `docs/index.html` 不再需要、也不應該填入試算表 ID 或任何 Google API 金鑰——地圖資料一律透過上面的 `API_URL` 向 Apps Script 拿。
 
-### 四、合法吸菸區資料（自動更新）
-
-合法吸菸區資料由 GitHub Actions 自動維護，**無需手動操作**：
-
-- 排程：每天台北時間上午 10:00（UTC 02:00）自動執行
-- 來源：台北市政府開放資料（resource ID: `acaa0f43-3b92-4241-b5eb-3f7fdd76b74f`）
-- 結果：自動 commit 至 `docs/smoking-zones.json`
-- 手動觸發：GitHub → Actions → `Update Smoking Zones Data` → `Run workflow`
-
-### 五、產生測試資料（選用）
+### 四、產生測試資料（選用）
 
 在 Apps Script 編輯器執行 `generateMockData()`，自動寫入 10,000 筆台北市模擬通報資料。執行 `clearMockData()` 可清除（reporter_hash 以 `mock-` 開頭的資料）。
 
@@ -284,5 +267,5 @@
 | 前端狀態快取 | 地圖點位與「📊 成效報表」資料皆暫存於瀏覽器記憶體，僅在使用者手動點擊圖層按鈕或按下「🔄 重新整理」時才會向 Apps Script 重新取資料；背景試算表異動不會即時反映在已開啟的分頁 |
 | 字體限制 | OpenFreeMap 不提供自訂字體，地圖標籤使用底圖內建字體 |
 | 照片上傳大小 | 表單會在瀏覽器端先壓縮（長邊 1600px、JPEG 品質 0.75）再上傳，避免手機原圖過大塞爆 `google.script.run` 的傳輸與 Apps Script 執行時間；壓縮後仍可能因網路狀況上傳較慢 |
-| 合法吸菸區地址地理編碼 | 地址若地理編碼失敗（例如地址寫得不夠完整），該筆點位會直接跳過、不會顯示在地圖上；建議部署後執行一次 `warmZoneGeocodeCache()` 並檢查 Apps Script 執行紀錄，確認沒有地址失敗 |
-| 合法吸菸區資料即時性 | 座標快取在指令碼屬性，同一地址不會重複查詢；「指定吸菸區設定」若修改了某筆既有地址，需要手動清除該筆快取（或整個 `ZONE_GEOCODE_CACHE` 屬性）才會重新查詢新地址 |
+| 吸菸區巡查圖層地址地理編碼 | 地址若地理編碼失敗（例如地址寫得不夠完整），該筆點位會直接跳過、不會顯示在地圖上；建議部署後執行一次 `warmZoneGeocodeCache()` 並檢查 Apps Script 執行紀錄，確認沒有地址失敗 |
+| 吸菸區巡查圖層資料即時性 | 座標快取在指令碼屬性，同一地址不會重複查詢；「指定吸菸區設定」若修改了某筆既有地址，需要手動清除該筆快取（或整個 `ZONE_GEOCODE_CACHE` 屬性）才會重新查詢新地址 |

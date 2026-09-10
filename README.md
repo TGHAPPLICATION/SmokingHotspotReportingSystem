@@ -127,7 +127,7 @@
 │   ├── Config.gs               # 設定值管理（讀取 Script Properties，不寫死金鑰/ID）
 │   ├── Inspection.gs           # 稽查通報後端（環保局菸蒂回報分頁讀寫、Drive 照片上傳）
 │   ├── GenerateMockData.gs     # 測試資料產生器（10,000 筆，含清除功能）
-│   ├── Form.html               # 稽查通報表單（GPS / 手動地址、行政區、單位姓名、照片上傳）
+│   ├── Form.html               # 稽查通報表單（分頁：菸蒂通報／吸菸區巡查〔即將推出〕）
 │   ├── processFormData.gs      # HTML Service 表單資料橋接（呼叫 Inspection.gs）/ 地址地理編碼
 │   └── appsscript.json         # Apps Script 專案設定
 ├── .github/workflows/
@@ -168,6 +168,7 @@
 | 11 | inspector_unit | STRING | 稽查單位（表單必填） |
 | 12 | inspector_name | STRING | 稽查人員姓名（表單必填） |
 | 13 | photo_url | STRING | 現場照片的 Google Drive 公開檢視連結，無照片則空白 |
+| 14 | butt_count | INTEGER | 菸蒂數量（選填，只能填正整數，無填寫則空白） |
 
 > 這張工作表記錄的是**內部稽查人員**的登錄資料（含真實姓名、單位），跟上方 `SmokingReports` 給一般民眾匿名通報的設計不同，兩者刻意分開存放、互不影響。若這張分頁原本沒有標題列（例如舊資料直接匯入），`Inspection.gs` 的 `getOrCreateInspectionSheet_()` 第一次寫入時會自動補上標題列，不需要手動到 Google Sheets 編輯。
 

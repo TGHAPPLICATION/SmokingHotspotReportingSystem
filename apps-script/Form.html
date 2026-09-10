@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>吸菸熱點通報</title>
+<title>環保局菸蒂稽查回報</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,6 +36,33 @@
   .card-header p  { font-size: .85rem; opacity: .85; margin-top: 4px; }
 
   .card-body { padding: 20px; }
+
+  .section-title {
+    font-size: .8rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 8px;
+  }
+  .mb-16 { margin-bottom: 16px; }
+
+  /* 一般輸入欄位共用樣式 */
+  .text-input, .select-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: .95rem;
+    outline: none;
+    transition: border-color .2s;
+    font-family: inherit;
+    background: #fff;
+  }
+  .text-input:focus, .select-input:focus { border-color: #e74c3c; }
+
+  .field-row { display: flex; gap: 8px; }
+  .field-row > * { flex: 1; min-width: 0; }
 
   /* 位置區塊 */
   .location-block { margin-bottom: 20px; }
@@ -87,17 +114,6 @@
   .divider::before { left: 0; }
   .divider::after  { right: 0; }
 
-  .address-input {
-    width: 100%;
-    padding: 12px 14px;
-    border: 1.5px solid #e0e0e0;
-    border-radius: 12px;
-    font-size: .95rem;
-    outline: none;
-    transition: border-color .2s;
-  }
-  .address-input:focus { border-color: #e74c3c; }
-
   .geocode-btn {
     width: 100%;
     margin-top: 8px;
@@ -120,6 +136,44 @@
     margin-top: 12px;
     display: none;
     border: 1.5px solid #e0e0e0;
+  }
+
+  /* 照片上傳 */
+  .photo-btn {
+    width: 100%;
+    padding: 12px;
+    border: 1.5px dashed #999;
+    border-radius: 12px;
+    background: #fafafa;
+    color: #555;
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .photo-btn:hover { background: #f0f0f0; }
+  .photo-preview-wrap { margin-top: 10px; position: relative; display: none; }
+  .photo-preview {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1.5px solid #e0e0e0;
+    display: block;
+  }
+  .photo-remove-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: rgba(0,0,0,.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    font-size: .9rem;
+    cursor: pointer;
   }
 
   /* 補充說明 */
@@ -183,24 +237,14 @@
   }
   .status-msg.success { background: #d4edda; color: #155724; }
   .status-msg.error   { background: #f8d7da; color: #721c24; }
-
-  .section-title {
-    font-size: .8rem;
-    font-weight: 600;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    margin-bottom: 8px;
-  }
-  .mb-16 { margin-bottom: 16px; }
 </style>
 </head>
 <body>
 
 <div class="card">
   <div class="card-header">
-    <h1>🚭 吸菸熱點通報</h1>
-    <p>協助記錄台北市吸菸熱點，建立更健康的環境</p>
+    <h1>🚭 環保局菸蒂稽查回報</h1>
+    <p>稽查人員現場勸導 / 蒐證登錄</p>
   </div>
 
   <div class="card-body">
@@ -208,6 +252,32 @@
     <!-- 目前時段 -->
     <div class="timeslot-badge band-1" id="timeslot-badge">
       🕐 通報時段：<strong id="slot-label">計算中…</strong>
+    </div>
+
+    <!-- 稽查人員資訊 -->
+    <div class="mb-16">
+      <div class="section-title">稽查人員資訊 *</div>
+      <div class="field-row mb-16">
+        <input class="text-input" id="inspector-unit" type="text"
+          placeholder="稽查單位" oninput="validateFormReady()">
+        <input class="text-input" id="inspector-name" type="text"
+          placeholder="姓名" oninput="validateFormReady()">
+      </div>
+      <select class="select-input" id="district-select" onchange="validateFormReady()">
+        <option value="">請選擇行政區</option>
+        <option value="中正區">中正區</option>
+        <option value="大同區">大同區</option>
+        <option value="中山區">中山區</option>
+        <option value="松山區">松山區</option>
+        <option value="大安區">大安區</option>
+        <option value="萬華區">萬華區</option>
+        <option value="信義區">信義區</option>
+        <option value="士林區">士林區</option>
+        <option value="北投區">北投區</option>
+        <option value="內湖區">內湖區</option>
+        <option value="南港區">南港區</option>
+        <option value="文山區">文山區</option>
+      </select>
     </div>
 
     <!-- 位置 -->
@@ -221,7 +291,7 @@
 
       <div class="divider">或手動輸入地址</div>
 
-      <input class="address-input" id="address-input"
+      <input class="text-input" id="address-input"
         type="text" placeholder="例：台北市信義區市府路45號"
         oninput="onAddressInput()">
       <button class="geocode-btn" id="geocode-btn" onclick="geocodeAddress()" disabled>
@@ -231,8 +301,22 @@
 
     <div id="map-preview"></div>
 
-    <!-- 補充說明 -->
+    <!-- 照片上傳 -->
     <div class="mb-16" style="margin-top: 16px;">
+      <div class="section-title">現場照片（選填）</div>
+      <button type="button" class="photo-btn" id="photo-btn" onclick="document.getElementById('photo-input').click()">
+        📷 <span id="photo-btn-text">拍照 / 選擇照片</span>
+      </button>
+      <input type="file" id="photo-input" accept="image/*" capture="environment"
+        style="display:none" onchange="onPhotoSelected(event)">
+      <div class="photo-preview-wrap" id="photo-preview-wrap">
+        <img class="photo-preview" id="photo-preview">
+        <button type="button" class="photo-remove-btn" onclick="removePhoto()">✕</button>
+      </div>
+    </div>
+
+    <!-- 補充說明 -->
+    <div class="mb-16">
       <div class="section-title">補充說明（選填）</div>
       <textarea class="desc-area" id="description" maxlength="100"
         placeholder="例：騎樓下、公園入口附近…"
@@ -258,13 +342,20 @@ var state = {
   locationSource: null,
   timeSlot: null,
   map: null,
-  marker: null
+  marker: null,
+  photoBase64: null,   // 不含 data URL 前綴
+  photoMimeType: null
 };
+
+var PROFILE_KEY = 'smoking_inspector_profile';
+var MAX_PHOTO_DIMENSION = 1600;
+var PHOTO_JPEG_QUALITY = 0.75;
 
 // ── 初始化 ────────────────────────────────────────────────────
 (function init() {
   updateSlotLabel();
   setInterval(updateSlotLabel, 60000);
+  loadProfileFromStorage();
 })();
 
 function updateSlotLabel() {
@@ -282,6 +373,36 @@ function updateSlotLabel() {
   }
   document.getElementById('slot-label').textContent = band.label;
   document.getElementById('timeslot-badge').className = 'timeslot-badge ' + band.cls;
+}
+
+// ── 稽查人員預設值（LocalStorage）────────────────────────────
+function loadProfileFromStorage() {
+  var raw = localStorage.getItem(PROFILE_KEY);
+  if (!raw) return;
+  try {
+    var profile = JSON.parse(raw);
+    if (profile.unit) document.getElementById('inspector-unit').value = profile.unit;
+    if (profile.name) document.getElementById('inspector-name').value = profile.name;
+    if (profile.district) document.getElementById('district-select').value = profile.district;
+  } catch (e) { /* 忽略壞掉的舊資料 */ }
+}
+
+function saveProfileToStorage() {
+  var profile = {
+    unit: document.getElementById('inspector-unit').value.trim(),
+    name: document.getElementById('inspector-name').value.trim(),
+    district: document.getElementById('district-select').value
+  };
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+
+// ── 表單是否可送出 ────────────────────────────────────────────
+function validateFormReady() {
+  var hasLocation = state.lat !== null && state.lng !== null;
+  var hasUnit = document.getElementById('inspector-unit').value.trim().length > 0;
+  var hasName = document.getElementById('inspector-name').value.trim().length > 0;
+  var hasDistrict = document.getElementById('district-select').value.length > 0;
+  document.getElementById('submit-btn').disabled = !(hasLocation && hasUnit && hasName && hasDistrict);
 }
 
 // ── GPS 定位 ──────────────────────────────────────────────────
@@ -355,7 +476,7 @@ function setLocation(lat, lng, source) {
   state.lng = lng;
   state.locationSource = source;
 
-  document.getElementById('submit-btn').disabled = false;
+  validateFormReady();
   document.getElementById('map-preview').style.display = 'block';
 
   if (!state.map) {
@@ -372,6 +493,44 @@ function setLocation(lat, lng, source) {
 
   // 觸發 Leaflet resize（在隱藏元素變可見後）
   setTimeout(function() { state.map.invalidateSize(); }, 100);
+}
+
+// ── 照片選取 & 用戶端壓縮 ─────────────────────────────────────
+function onPhotoSelected(event) {
+  var file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  document.getElementById('photo-btn-text').textContent = '處理照片中…';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var scale = Math.min(1, MAX_PHOTO_DIMENSION / Math.max(img.width, img.height));
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      var dataUrl = canvas.toDataURL('image/jpeg', PHOTO_JPEG_QUALITY);
+      state.photoBase64 = dataUrl.split(',')[1];
+      state.photoMimeType = 'image/jpeg';
+
+      document.getElementById('photo-preview').src = dataUrl;
+      document.getElementById('photo-preview-wrap').style.display = 'block';
+      document.getElementById('photo-btn-text').textContent = '重新選擇照片';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePhoto() {
+  state.photoBase64 = null;
+  state.photoMimeType = null;
+  document.getElementById('photo-input').value = '';
+  document.getElementById('photo-preview-wrap').style.display = 'none';
+  document.getElementById('photo-btn-text').textContent = '拍照 / 選擇照片';
 }
 
 // ── 字數計算 ──────────────────────────────────────────────────
@@ -392,12 +551,48 @@ function submitReport() {
   btn.textContent = '送出中…';
   hideMsg();
 
+  if (state.photoBase64) {
+    btn.textContent = '上傳照片中…';
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result && result.success) {
+          finishSubmit(result.url);
+        } else {
+          btn.disabled = false;
+          btn.textContent = '送出通報';
+          if (confirm('照片上傳失敗（' + (result && result.error) + '），是否要不含照片直接送出？')) {
+            finishSubmit('');
+          }
+        }
+      })
+      .withFailureHandler(function() {
+        btn.disabled = false;
+        btn.textContent = '送出通報';
+        if (confirm('照片上傳失敗，是否要不含照片直接送出？')) {
+          finishSubmit('');
+        }
+      })
+      .uploadInspectionPhoto(state.photoBase64, state.photoMimeType, 'report_' + Date.now() + '.jpg');
+  } else {
+    finishSubmit('');
+  }
+}
+
+function finishSubmit(photoUrl) {
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '送出中…';
+
   var payload = {
     lat: state.lat,
     lng: state.lng,
     locationSource: state.locationSource,
     addressInput: document.getElementById('address-input').value.trim(),
     description: document.getElementById('description').value.trim(),
+    district: document.getElementById('district-select').value,
+    inspectorUnit: document.getElementById('inspector-unit').value.trim(),
+    inspectorName: document.getElementById('inspector-name').value.trim(),
+    photoUrl: photoUrl || '',
     reporterToken: getReporterToken()
   };
 
@@ -405,13 +600,17 @@ function submitReport() {
     .withSuccessHandler(function(result) {
       btn.textContent = '送出通報';
       if (result && result.success) {
-        showMsg('✅ 通報成功！感謝您協助記錄吸菸熱點。', 'success');
+        saveProfileToStorage();
+        showMsg('✅ 通報成功！已記錄至環保局菸蒂回報。', 'success');
         resetForm();
       } else {
         var errMsgs = {
-          DUPLICATE_REPORT: '您已在此時段回報過相同地點，感謝您的熱心！',
+          DUPLICATE_REPORT: '您已在此時段回報過相同地點。',
           OUT_OF_TAIPEI_BOUNDS: '此位置不在台北市範圍內，請確認位置是否正確。',
-          INVALID_COORDINATES: '位置資料有誤，請重新定位。'
+          INVALID_COORDINATES: '位置資料有誤，請重新定位。',
+          MISSING_DISTRICT: '請選擇行政區。',
+          MISSING_INSPECTOR_UNIT: '請填寫稽查單位。',
+          MISSING_INSPECTOR_NAME: '請填寫稽查人員姓名。'
         };
         showMsg(errMsgs[result && result.error] || '送出失敗，請稍後再試。', 'error');
         btn.disabled = false;
@@ -427,7 +626,7 @@ function submitReport() {
 
 // Apps Script 伺服器端呼叫橋接
 // （Apps Script HTML Service 使用 google.script.run，
-//  需在 Code.gs 中加一個 processFormData function）
+//  對應 Code.gs / Inspection.gs 中的 processFormData / uploadInspectionPhoto）
 </script>
 
 <script>
@@ -459,10 +658,11 @@ function resetForm() {
   document.getElementById('address-input').value = '';
   document.getElementById('description').value = '';
   document.getElementById('char-count').textContent = '0';
-  document.getElementById('submit-btn').disabled = true;
   document.getElementById('map-preview').style.display = 'none';
   setGPSBtnState('', '取得 GPS 定位');
   document.getElementById('geocode-btn').disabled = true;
+  removePhoto();
+  validateFormReady();
 }
 </script>
 </body>

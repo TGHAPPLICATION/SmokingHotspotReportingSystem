@@ -3,8 +3,7 @@
 
 function processFormData(data) {
   try {
-    validateReport(data);
-    var result = saveReport(data);
+    var result = saveInspectionReport(data);
     return { success: true, id: result.id };
   } catch (err) {
     return { success: false, error: err.message };

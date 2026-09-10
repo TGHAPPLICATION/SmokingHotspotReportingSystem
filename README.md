@@ -7,7 +7,7 @@
 | 功能 | 網址 |
 |------|------|
 | 統計地圖 | `https://tghtaipei.github.io/SmokingHotspotReportingSystem/` |
-| 通報表單 | Apps Script 部署網址（見部署步驟） |
+| 稽查通報表單 | Apps Script 部署網址（見部署步驟），也是地圖右上角「📍 通報」按鈕的連結 |
 
 ---
 
@@ -51,6 +51,8 @@
 | 圖表報表 | Chart.js 4.4.3 |
 | 底圖 | OpenFreeMap liberty（免費、無需 API Key） |
 | 測試資料產生 | Apps Script GenerateMockData.gs（10,000 筆） |
+| 稽查通報表單 | Apps Script HTML Service（`Form.html` + `Inspection.gs`），固定寫入「環保局菸蒂回報」分頁 |
+| 照片儲存 | Google Drive（用戶端先壓縮成 JPEG 再以 base64 上傳，Apps Script 寫入指定資料夾並設為「知道連結即可檢視」） |
 
 ---
 
@@ -76,6 +78,7 @@
 - 每個分頁各自獨立分群、獨立計數，可同時開啟多個分頁比對
 - 座標欄位採自動偵測：優先比對常見欄位名稱（`lat`/`緯度`/`經度`…），找不到時自動掃描台北座標範圍內的數值欄位，因此可直接沿用衛生局、環保局等單位既有的 Excel／表單格式，不需要改造成固定的九欄格式
 - 資料一律由 Apps Script Web App 代理讀取（見〈系統架構〉），試算表本身不需要公開分享
+- 若點位的 `photo_url` 欄位有值，放大到「點位模式」（分群失效、顯示個別點位時）點擊該點位，彈出視窗會直接顯示現場照片，不會跟其他文字屬性混在一起列出
 
 ### 篩選功能
 
@@ -120,11 +123,12 @@
 │   ├── smoking-zones.json      # 台北市合法吸菸區 GeoJSON（GitHub Actions 每日更新）
 │   └── api-mock.json           # 本機示範資料（10,000 筆）
 ├── apps-script/
-│   ├── Code.gs                 # 主程式（表單送出、API、去重、驗證、動態圖層讀取）
+│   ├── Code.gs                 # 主程式（API、去重、驗證、動態圖層讀取，doPost 寫入 SmokingReports）
 │   ├── Config.gs               # 設定值管理（讀取 Script Properties，不寫死金鑰/ID）
+│   ├── Inspection.gs           # 稽查通報後端（環保局菸蒂回報分頁讀寫、Drive 照片上傳）
 │   ├── GenerateMockData.gs     # 測試資料產生器（10,000 筆，含清除功能）
-│   ├── Form.html               # 通報表單（GPS / 手動地址）
-│   ├── processFormData.gs      # HTML Service 表單資料橋接 / 地址地理編碼
+│   ├── Form.html               # 稽查通報表單（GPS / 手動地址、行政區、單位姓名、照片上傳）
+│   ├── processFormData.gs      # HTML Service 表單資料橋接（呼叫 Inspection.gs）/ 地址地理編碼
 │   └── appsscript.json         # Apps Script 專案設定
 ├── .github/workflows/
 │   └── update-smoking-zones.yml  # 合法吸菸區資料每日自動更新 workflow
@@ -153,6 +157,20 @@
 | description | STRING | 補充說明（選填） |
 | reporter_hash | STRING | SHA-256 雜湊前 16 碼（用於去重，不儲存個人資料） |
 
+### 環保局菸蒂回報工作表（稽查通報表單專用）
+
+工作表名稱固定為 `環保局菸蒂回報`（寫死在 `Inspection.gs`）。前 9 欄與上方 `SmokingReports` 完全相同、後 4 欄是稽查表單新增的欄位，接在既有欄位之後、不打亂順序，對舊資料完全相容：
+
+| # | 欄位 | 型別 | 說明 |
+|---|------|------|------|
+| 1–9 | id / timestamp / time_slot / lat / lng / location_source / address_input / description / reporter_hash | 同上 | 意義與 `SmokingReports` 相同 |
+| 10 | district | STRING | 行政區（表單下拉選單，台北市 12 行政區） |
+| 11 | inspector_unit | STRING | 稽查單位（表單必填） |
+| 12 | inspector_name | STRING | 稽查人員姓名（表單必填） |
+| 13 | photo_url | STRING | 現場照片的 Google Drive 公開檢視連結，無照片則空白 |
+
+> 這張工作表記錄的是**內部稽查人員**的登錄資料（含真實姓名、單位），跟上方 `SmokingReports` 給一般民眾匿名通報的設計不同，兩者刻意分開存放、互不影響。若這張分頁原本沒有標題列（例如舊資料直接匯入），`Inspection.gs` 的 `getOrCreateInspectionSheet_()` 第一次寫入時會自動補上標題列，不需要手動到 Google Sheets 編輯。
+
 ### 其他動態圖層分頁（選用）
 
 同一份試算表底下可自由新增其他分頁（例如稽查單位自建的 Excel 匯入資料），會自動出現在地圖 Header 成為獨立圖層，欄位格式不需要與上表一致——只要有一欄能被判定為緯度、一欄能被判定為經度即可（見〈多分頁動態圖層〉）。
@@ -170,7 +188,7 @@
 
 1. 開啟 [Google Apps Script](https://script.google.com) 建立新專案
 2. 複製以下檔案至對應 `.gs` / `.html`：
-   - `Code.gs`、`Config.gs`、`GenerateMockData.gs`、`Form.html`、`processFormData.gs`、`appsscript.json`
+   - `Code.gs`、`Config.gs`、`Inspection.gs`、`GenerateMockData.gs`、`Form.html`、`processFormData.gs`、`appsscript.json`
 3. **設定專案設定 → 指令碼屬性**（不要把 ID 寫進程式碼）：
    | 屬性名稱 | 必填 | 值 |
    |---|---|---|
@@ -180,9 +198,11 @@
 4. **部署 → 新增部署 → 網頁應用程式**
    - 執行者：**我**
    - 存取者：**所有人**
-5. 複製部署網址，填入通報表單 `Form.html` 中的 `ACTION_URL`
+5. 複製部署網址：這個網址同時是「通報表單」的網址，也是 `docs/index.html` 的 `API_URL`（見下方步驟三），Form.html 本身不需要另外填任何網址
 
 > 之後若需要更換試算表（例如原檔損毀重建），只要回到「指令碼屬性」改 `SHEET_ID` 即可，不需要改動、也不需要重新部署任何程式碼。
+
+> **首次加入照片上傳功能時**：因為 `Inspection.gs` 用到 `DriveApp`，存檔或執行時 Apps Script 會跳出「這個應用程式需要存取你的 Google 雲端硬碟」的授權畫面，需要部署者本人手動點「允許」一次，這步驟無法代為執行。之後每次部署新版本都不會再跳出（除非撤銷授權）。
 
 ### 三、GitHub Pages 設定
 
@@ -209,11 +229,12 @@
 
 ## 安全性設計
 
-- 不儲存使用者個人資料
-- 以裝置識別碼 SHA-256 雜湊去重，同一裝置同時段同位置（100m 內）僅計 1 筆
+- 通報表單（`SmokingReports`／`doPost`／`GenerateMockData.gs` 這條路徑）不儲存使用者個人資料，以裝置識別碼 SHA-256 雜湊去重，同一裝置同時段同位置（100m 內）僅計 1 筆
 - 座標限制於台北市範圍（緯度 24.9–25.3，經度 121.4–121.7）
 - 試算表 ID、工作表名稱等設定值一律存放於 Apps Script「指令碼屬性」，不寫死在程式碼中，前端與 GitHub 上的原始碼皆不含任何試算表 ID 或 API 金鑰
 - 所有讀取（圖層清單、座標資料）都透過 Apps Script Web App 以「執行者：我」代理存取，Google Sheets 本身**不需要公開分享**，降低原始通報資料（含地址、備註）被任意知道連結的人讀取的風險
+- **例外**：稽查通報表單（`Form.html` → `Inspection.gs` → `環保局菸蒂回報`）是內部登錄工具，**會**明碼記錄稽查人員的單位與姓名，這是刻意設計（供內部稽核追蹤），不適用「不儲存個人資料」這條原則，請勿把這張分頁的存取權隨意分享出去
+- 現場照片存於 Google Drive，設定為「知道連結即可檢視」（地圖需要直接用 `<img>` 嵌入顯示，因此無法要求登入才能看）。照片檔案 ID 為長隨機字串、不會被公開列出目錄，但拍攝內容本身（門牌、路人等）一經上傳即可被任何取得連結的人看到，請提醒稽查人員拍照時留意畫面內容
 
 ---
 
@@ -226,3 +247,4 @@
 | 動態圖層座標偵測 | 分頁若缺乏可辨識的經緯度欄位名稱、且數值也不落在台北座標範圍內，該分頁將無法顯示任何點位 |
 | 前端狀態快取 | 地圖點位與「📊 成效報表」資料皆暫存於瀏覽器記憶體，僅在使用者手動點擊圖層按鈕或按下「🔄 重新整理」時才會向 Apps Script 重新取資料；背景試算表異動不會即時反映在已開啟的分頁 |
 | 字體限制 | OpenFreeMap 不提供自訂字體，地圖標籤使用底圖內建字體 |
+| 照片上傳大小 | 表單會在瀏覽器端先壓縮（長邊 1600px、JPEG 品質 0.75）再上傳，避免手機原圖過大塞爆 `google.script.run` 的傳輸與 Apps Script 執行時間；壓縮後仍可能因網路狀況上傳較慢 |

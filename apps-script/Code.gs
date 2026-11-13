@@ -32,6 +32,7 @@ function doGet(e) {
     if (action === 'listSheets')        return listSheetsJson(e);
     if (action === 'getSheetRows')      return getSheetRowsJson(e);
     if (action === 'getDesignatedZones') return getDesignatedZoneGeoJson(e);
+    if (action === 'getHotspotRows')    return getHotspotRowsJson(e); // Hotspot.gs
   } catch (err) {
     // 未包裝的例外（例如 Config.gs 找不到 SHEET_ID）若直接拋出，
     // Apps Script 會回傳錯誤頁面，前端的 <script> JSONP 讀取會被
@@ -169,8 +170,9 @@ function getOrCreateSheet(ss, sheetName) {
 
 // 這些分頁是給其他功能內部使用的設定/明細表，不應該出現在地圖 Header
 // 的動態圖層按鈕列（吸菸區巡查會在 getSheetRowsJson 特別轉接，
-// 指定吸菸區設定純粹是供 ZonePatrol.gs 讀取的參考資料）
-var HIDDEN_DYNAMIC_LAYER_SHEETS = ['指定吸菸區設定'];
+// 指定吸菸區設定純粹是供 ZonePatrol.gs 讀取的參考資料；
+// 吸菸熱點由前端 hotspot-report.js 以 getHotspotRows 專門讀取）
+var HIDDEN_DYNAMIC_LAYER_SHEETS = ['指定吸菸區設定', '吸菸熱點'];
 
 // ── 動態圖層：列出試算表所有分頁名稱（取代前端直接呼叫 Sheets API）──
 function listSheetsJson(e) {

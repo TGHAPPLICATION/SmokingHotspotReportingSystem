@@ -1,17 +1,20 @@
 /* ============================================================
- * 吸菸熱點（CSV 匯入）圖層 + 動態篩選報表 —— 獨立模組
+ * 吸菸熱點圖層 + 動態篩選報表 —— 獨立模組
  *
- * 資料來源：docs/data/smoking-hotspots.csv（系統匯出檔，直接覆蓋即可更新）
+ * 資料來源：Google Sheets「吸菸熱點」分頁，經 Apps Script（Hotspot.gs，action=getHotspotRows）讀取。
+ *   更新資料：在試算表匯入新的系統匯出 CSV（取代目前工作表）即可，不需改程式或推送 GitHub
  * 欄位：單位,上傳時間,行政區,座標,專案名稱,場域說明,通報指標,吸菸區,菸蒂估算數量,備註說明
  *
- * 依賴 index.html 既有全域：map、mapLoaded、viewMode、esc()、sheetLayers、addSheetLayer、
+ * 依賴 index.html 既有全域：API_URL、map、mapLoaded、viewMode、esc()、sheetLayers、addSheetLayer、
  *   createSheetLayerButton、buildSheetSupercluster、setViewMode、updateReportButtonVisibility、Chart
  * 對外只暴露 window.HotspotReport.ready（供 updateReportButtonVisibility 判斷）
  * ============================================================ */
 (function () {
   'use strict';
 
-  var CSV_URL = './data/smoking-hotspots.csv';
+  // 臺北市行政區界（taiwan-atlas towns-10t，內政部國土測繪中心資料，MIT）
+  // 用座標判定實際行政區，校正「行政區」欄位填錯的資料
+  var DISTRICT_URL = './data/taipei-districts.geojson';
   var LAYER_COLOR = '#f97316';
   // 菸蒂數量分級（單一色相、淺→深，表示量級）
   var STEPS = [
@@ -23,33 +26,34 @@
   var DISTRICTS = ['中正區','大同區','中山區','松山區','大安區','萬華區','信義區','士林區','北投區','內湖區','南港區','文山區'];
 
   var state = {
-    rows: [],
+    rows: [], corrected: 0,
     from: '', to: '', minDate: '', maxDate: '',
     districts: {} // 空物件 = 全部行政區
   };
   var charts = {};
   var api = window.HotspotReport = { ready: false };
 
-  // ── CSV 解析（支援雙引號欄位，未來匯出若含逗號也不會錯位） ──
-  function parseCsv(text) {
-    text = text.replace(/^﻿/, '');
-    var rows = [], row = [], cell = '', q = false;
-    for (var i = 0; i < text.length; i++) {
-      var ch = text[i];
-      if (q) {
-        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
-        else cell += ch;
-      } else if (ch === '"') q = true;
-      else if (ch === ',') { row.push(cell); cell = ''; }
-      else if (ch === '\n' || ch === '\r') {
-        if (ch === '\r' && text[i + 1] === '\n') i++;
-        row.push(cell); rows.push(row); row = []; cell = '';
-      } else cell += ch;
-    }
-    if (cell || row.length) { row.push(cell); rows.push(row); }
-    var head = rows.shift() || [];
-    return rows.map(function (r) {
-      var o = {}; head.forEach(function (h, k) { o[h.trim()] = (r[k] || '').trim(); }); return o;
+  // ── Apps Script 回傳 { header, rows } → 以標題為 key 的物件陣列 ──
+  function toObjects(resp) {
+    var head = resp.header || [];
+    return (resp.rows || []).map(function (r) {
+      var o = {}; head.forEach(function (h, k) { o[h] = String(r[k] == null ? '' : r[k]).trim(); }); return o;
+    });
+  }
+
+  // JSONP 讀取（與 index.html 其他圖層相同機制，前端不持有試算表 ID）
+  function loadRows() {
+    return new Promise(function (resolve, reject) {
+      var cb = '_hotspotRowsCb', tag = document.createElement('script');
+      var done = function () { if (tag.parentNode) tag.parentNode.removeChild(tag); delete window[cb]; };
+      window[cb] = function (resp) {
+        done();
+        if (!resp || resp.success === false) reject(new Error((resp && resp.error) || '回應格式錯誤'));
+        else resolve(toObjects(resp));
+      };
+      tag.onerror = function () { done(); reject(new Error('Apps Script 無法連線')); };
+      tag.src = API_URL + '?action=getHotspotRows&callback=' + cb;
+      document.head.appendChild(tag);
     });
   }
 
@@ -72,6 +76,47 @@
     };
   }
 
+  // ── 座標 → 行政區（射線法點在多邊形內判定，先以外框快速排除） ──
+  function inRing(x, y, ring) {
+    var c = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+  function prepDistricts(fc) {
+    return (fc.features || []).map(function (f) {
+      var g = f.geometry, polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+      var b = [Infinity, Infinity, -Infinity, -Infinity];
+      polys.forEach(function (p) { p[0].forEach(function (pt) {
+        b[0] = Math.min(b[0], pt[0]); b[1] = Math.min(b[1], pt[1]);
+        b[2] = Math.max(b[2], pt[0]); b[3] = Math.max(b[3], pt[1]);
+      }); });
+      return { name: f.properties.name, polys: polys, bbox: b };
+    });
+  }
+  function districtOf(lng, lat, districts) {
+    for (var k = 0; k < districts.length; k++) {
+      var d = districts[k], b = d.bbox;
+      if (lng < b[0] || lng > b[2] || lat < b[1] || lat > b[3]) continue;
+      for (var p = 0; p < d.polys.length; p++) {
+        var poly = d.polys[p];
+        if (inRing(lng, lat, poly[0]) && !poly.slice(1).some(function (h) { return inRing(lng, lat, h); })) return d.name;
+      }
+    }
+    return null;
+  }
+  // 以座標判定結果覆寫行政區；保留原填值供彈窗比對。界線檔載入失敗或點位在市界外則沿用原填值
+  function correctDistricts(rows, fc) {
+    if (!fc) return;
+    var districts = prepDistricts(fc);
+    rows.forEach(function (r) {
+      var d = districtOf(r.lng, r.lat, districts);
+      if (d && d !== r.district) { r.origDistrict = r.district; r.district = d; state.corrected++; }
+    });
+  }
+
   function filtered() {
     var ds = Object.keys(state.districts);
     return state.rows.filter(function (r) {
@@ -87,7 +132,7 @@
     clusterSourceId: 'source-cl-hs_hotspot', clusterGlowId: 'layer-cl-glow-hs_hotspot',
     clusterLayerId: 'layer-cl-hs_hotspot',
     sc: null, visible: false, loaded: true, canReport: true,
-    local: true, // 靜態 CSV，重新整理時不向 Apps Script 取資料
+    local: true, // 由本模組自行載入（getHotspotRows），不走 index.html 的 getSheetRows
     legend: STEPS.map(function (s) { return { color: s.color, label: '菸蒂 ' + s.label }; }), // 點位模式圖例
     features: []
   };
@@ -103,6 +148,7 @@
       type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
       properties: {
         '地點': r.place || r.note || '', '菸蒂估算數量': r.butts, '行政區': r.district,
+        '原填行政區': r.origDistrict ? r.origDistrict + '（已依座標校正）' : '',
         '專案名稱': r.project, '單位': r.unit, '備註說明': r.place ? r.note : '', '上傳時間': r.time,
         // 既有報表 / 統計 / 時段配色所需欄位
         timestamp: r.date.toISOString(), time_slot: Math.floor(r.hour / 2)
@@ -279,7 +325,8 @@
       }).join('');
     var ds = Object.keys(state.districts);
     document.getElementById('hs-summary').textContent =
-      state.from + ' ～ ' + state.to + '｜' + (ds.length ? ds.length + ' 個行政區' : '全市') + '｜' + rows.length + ' 筆（地圖同步）';
+      state.from + ' ～ ' + state.to + '｜' + (ds.length ? ds.length + ' 個行政區' : '全市') + '｜' + rows.length + ' 筆（地圖同步）' +
+      (state.corrected ? '｜已依座標校正 ' + state.corrected + ' 筆行政區' : '');
     var days = Math.round((new Date(state.to) - new Date(state.from)) / 864e5) + 1;
     document.querySelectorAll('#hs-quick .hs-chip').forEach(function (b) {
       var n = +b.dataset.days;
@@ -387,11 +434,18 @@
     switchTab(legacyReportAvailable() ? 'legacy' : 'hotspot');
   });
 
-  fetch(CSV_URL, { cache: 'no-cache' })
-    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-    .then(function (text) {
-      state.rows = parseCsv(text).map(toRecord).filter(Boolean);
-      if (!state.rows.length) throw new Error('CSV 無有效資料');
+  var boundary = fetch(DISTRICT_URL)
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .catch(function (e) { console.warn('[hotspot] 行政區界線載入失敗，沿用原填行政區', e); return null; });
+
+  Promise.all([
+    loadRows(),
+    boundary
+  ])
+    .then(function (res) {
+      state.rows = res[0].map(toRecord).filter(Boolean);
+      correctDistricts(state.rows, res[1]);
+      if (!state.rows.length) throw new Error('「吸菸熱點」分頁無有效資料');
       var days = state.rows.map(function (r) { return r.day; }).sort();
       state.minDate = days[0]; state.maxDate = days[days.length - 1];
       setRange(0);
@@ -401,5 +455,5 @@
       if (!mapLoaded) map.once('load', refreshMap);
       updateReportButtonVisibility();
     })
-    .catch(function (e) { console.warn('[hotspot] CSV 載入失敗', e); });
+    .catch(function (e) { console.warn('[hotspot] 吸菸熱點資料載入失敗', e); });
 })();

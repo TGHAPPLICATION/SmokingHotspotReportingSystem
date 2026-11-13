@@ -11,7 +11,12 @@
 // Script Properties），並帶入該地點在「吸菸區巡查」最新一筆照片。
 
 var ZONE_SETTING_SHEET_NAME = '指定吸菸區設定';
-var ZONE_PATROL_SHEET_NAME = '吸菸區巡查';
+// 巡查紀錄分頁名稱：優先讀「指令碼屬性」ZONE_PATROL_SHEET_NAME，分頁改名時只要改屬性，
+// 不必修改程式或重新部署；未設定時使用預設值
+var ZONE_PATROL_SHEET_DEFAULT = '指定吸菸區位置與巡查測試';
+function zonePatrolSheetName_() {
+  return PropertiesService.getScriptProperties().getProperty('ZONE_PATROL_SHEET_NAME') || ZONE_PATROL_SHEET_DEFAULT;
+}
 var ZONE_PATROL_HEADERS = [
   'id', 'timestamp', 'time_slot', 'district', 'location',
   'managing_unit', 'reporter_name', 'photo_url'
@@ -45,9 +50,9 @@ function getDesignatedSmokingZones() {
 
 // ── 取得或建立「吸菸區巡查」分頁，並確保標題列完整 ─────────────
 function getOrCreateZonePatrolSheet_(ss) {
-  var sheet = ss.getSheetByName(ZONE_PATROL_SHEET_NAME);
+  var sheet = ss.getSheetByName(zonePatrolSheetName_());
   if (!sheet) {
-    sheet = ss.insertSheet(ZONE_PATROL_SHEET_NAME);
+    sheet = ss.insertSheet(zonePatrolSheetName_());
     sheet.getRange(1, 1, 1, ZONE_PATROL_HEADERS.length).setValues([ZONE_PATROL_HEADERS]);
     return sheet;
   }
@@ -157,7 +162,7 @@ function warmZoneGeocodeCache() {
 // （lastPatrol 不論有無照片都算，用來判斷地點是否「已巡查」）
 function getLatestPatrolPhotos_(ss) {
   var empty = { photos: {}, lastPatrol: {} };
-  var sheet = ss.getSheetByName(ZONE_PATROL_SHEET_NAME);
+  var sheet = ss.getSheetByName(zonePatrolSheetName_());
   if (!sheet) return empty;
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return empty;

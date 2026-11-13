@@ -16,6 +16,8 @@
 //   SHEET_ID           是    試算表 ID（網址 /d/ 與 /edit 之間那段字串）
 //   SHEET_NAME         否    通報資料工作表名稱，預設 SmokingReports
 //   ALLOWED_ORIGIN     否    允許讀取的前端網域，預設 GitHub Pages 網址
+//   ZONE_PATROL_SHEET_NAME 否 吸菸區巡查紀錄分頁名稱，預設「指定吸菸區位置與巡查測試」
+//                            （地圖點選此分頁會畫出指定吸菸區位置，見 ZonePatrol.gs）
 // ============================================================
 
 function getConfig_() {

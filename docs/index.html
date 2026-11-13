@@ -584,8 +584,9 @@ function updateSheetStats() {
       var s = parseInt(f.properties && f.properties.time_slot);
       if (s >= 0 && s < 12) counts[s]++;
     });
-    var peak = counts.indexOf(Math.max.apply(null, counts));
-    document.getElementById('stat-peak').textContent = SLOT_LABELS[peak] || '—';
+    var max = Math.max.apply(null, counts);
+    // 圖層沒有任何時段資料（如吸菸區巡查的地點清單）時顯示「—」，避免誤顯示 00–02
+    document.getElementById('stat-peak').textContent = max > 0 ? SLOT_LABELS[counts.indexOf(max)] : '—';
   } else {
     document.getElementById('stat-peak').textContent = '—';
   }
@@ -895,6 +896,7 @@ document.getElementById('report-close').addEventListener('click', function() {
 })();
 
 // ── 動態分頁圖層管理器 ──────────────────────────────────────────
+var UNPATROLLED_COLOR = '#9ca3af';
 var LAYER_PALETTE = ['#8b5cf6','#f59e0b','#3b82f6','#ec4899','#06b6d4','#ef4444','#14b8a6'];
 var sheetLayers = [];
 
@@ -940,7 +942,8 @@ function addSheetLayer(layer) {
       layout: { visibility: 'none' },
       paint: {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 8, 18, 14],
-        'circle-color': layer.color, 'circle-opacity': 0.88,
+        // 吸菸區巡查：未巡查的指定吸菸區以灰色顯示（其他圖層無 patrol_status，維持圖層色）
+        'circle-color': ['match', ['get', 'patrol_status'], '未巡查', UNPATROLLED_COLOR, layer.color], 'circle-opacity': 0.88,
         'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.75
       }
     });
@@ -1024,6 +1027,15 @@ function loadSheetLayerData(layer) {
       });
       var countEl = document.getElementById('layer-count-' + layer.safeName);
       if (countEl) countEl.textContent = features.length > 0 ? ' ' + features.length + ' 處' : '';
+      // 吸菸區巡查：畫的是全部指定吸菸區，按鈕改顯示巡查涵蓋數，圖例區分已／未巡查
+      if (features.some(function(f) { return f.properties && f.properties.patrol_status; })) {
+        var patrolled = features.filter(function(f) { return f.properties.patrol_status === '已巡查'; }).length;
+        if (countEl) countEl.textContent = ' 已巡查 ' + patrolled + '／' + features.length + ' 處';
+        layer.legend = [
+          { color: layer.color, label: '已巡查（' + patrolled + '）' },
+          { color: UNPATROLLED_COLOR, label: '未巡查（' + (features.length - patrolled) + '）' }
+        ];
+      }
       if (layer.visible) {
         buildSheetSupercluster(layer);
         // 確保 cluster layers 已加入地圖

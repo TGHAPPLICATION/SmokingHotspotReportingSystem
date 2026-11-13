@@ -11,6 +11,8 @@
  * ============================================================ */
 (function () {
   'use strict';
+  var VERSION = '2026-11-13.2'; // 每次修改請一併更新 index.html 的 ?v= 參數
+  console.log('[hotspot] 模組版本 ' + VERSION);
 
   // 臺北市行政區界（taiwan-atlas towns-10t，內政部國土測繪中心資料，MIT）
   // 用座標判定實際行政區，校正「行政區」欄位填錯的資料
@@ -48,6 +50,10 @@
       var done = function () { if (tag.parentNode) tag.parentNode.removeChild(tag); delete window[cb]; };
       window[cb] = function (resp) {
         done();
+        console.log('[hotspot] API 回應：success=' + (resp && resp.success) +
+          '，欄位=' + JSON.stringify(resp && resp.header) + '，資料列數=' + ((resp && resp.rows) || []).length +
+          (resp && resp.error ? '，錯誤=' + resp.error : ''));
+        if (resp && resp.rows && resp.rows.length) console.log('[hotspot] 第 1 列原始值：', resp.rows[0]);
         if (!resp || resp.success === false) reject(new Error((resp && resp.error) || '回應格式錯誤'));
         else resolve(toObjects(resp));
       };
@@ -458,9 +464,12 @@
     boundary
   ])
     .then(function (res) {
-      state.rows = res[0].map(toRecord).filter(Boolean);
-      if (!state.rows.length && res[0].length) console.warn('[hotspot] 無法解析的資料範例（請確認欄位名稱與格式）：', res[0].slice(0, 3));
+      var invalid = [];
+      state.rows = res[0].map(function (o) { var r = toRecord(o); if (!r) invalid.push(o); return r; }).filter(Boolean);
+      console.log('[hotspot] 解析結果：有效 ' + state.rows.length + ' 筆，無效 ' + invalid.length + ' 筆');
+      if (invalid.length) console.log('[hotspot] 無效資料範例（缺上傳時間或座標，或格式無法判讀）：', invalid.slice(0, 3));
       correctDistricts(state.rows, res[1]);
+      console.log('[hotspot] 行政區界線' + (res[1] ? '已載入，依座標校正 ' + state.corrected + ' 筆' : '載入失敗，沿用原填行政區'));
       if (!state.rows.length) throw new Error('「吸菸熱點」分頁無有效資料');
       var days = state.rows.map(function (r) { return r.day; }).sort();
       state.minDate = days[0]; state.maxDate = days[days.length - 1];

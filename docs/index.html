@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>台北市吸菸熱點地圖</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.css">
-<link rel="stylesheet" href="./hotspot-report.css">
+<link rel="stylesheet" href="./hotspot-report.css?v=2026-11-13.2">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -1157,6 +1157,7 @@ map.on('load', function() {
   }, 500);
 });
 </script>
-<script src="./hotspot-report.js"></script>
+<!-- ?v= 為版本號，更新 hotspot-report.js/.css 時一併修改，避免瀏覽器與 CDN 讀到快取的舊檔 -->
+<script src="./hotspot-report.js?v=2026-11-13.2"></script>
 </body>
 </html>

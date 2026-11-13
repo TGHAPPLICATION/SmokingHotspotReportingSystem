@@ -152,12 +152,15 @@ function warmZoneGeocodeCache() {
   Logger.log('✅ 已處理 ' + addresses.length + ' 筆地址的地理編碼快取');
 }
 
-// 從「吸菸區巡查」找出每個地點（district+location）最新一筆照片
+// 從「吸菸區巡查」找出每個地點（district+location）最新一筆照片與最近巡查時間
+// 回傳 { photos: { key: photoUrl }, lastPatrol: { key: Date } }
+// （lastPatrol 不論有無照片都算，用來判斷地點是否「已巡查」）
 function getLatestPatrolPhotos_(ss) {
+  var empty = { photos: {}, lastPatrol: {} };
   var sheet = ss.getSheetByName(ZONE_PATROL_SHEET_NAME);
-  if (!sheet) return {};
+  if (!sheet) return empty;
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return {};
+  if (lastRow < 2) return empty;
 
   var values = sheet.getRange(2, 1, lastRow - 1, ZONE_PATROL_HEADERS.length).getValues();
   var idxTimestamp = ZONE_PATROL_HEADERS.indexOf('timestamp');
@@ -166,11 +169,14 @@ function getLatestPatrolPhotos_(ss) {
   var idxPhoto     = ZONE_PATROL_HEADERS.indexOf('photo_url');
 
   var latest = {}; // key: "district|location" -> { photoUrl, timestamp }
+  var lastPatrol = {};
   values.forEach(function(row) {
-    var photoUrl = String(row[idxPhoto] || '').trim();
-    if (!photoUrl) return;
     var key = String(row[idxDistrict] || '').trim() + '|' + String(row[idxLocation] || '').trim();
     var ts = row[idxTimestamp];
+    var d = new Date(ts);
+    if (!isNaN(d.getTime()) && (!lastPatrol[key] || d > lastPatrol[key])) lastPatrol[key] = d;
+    var photoUrl = String(row[idxPhoto] || '').trim();
+    if (!photoUrl) return;
     var current = latest[key];
     if (!current || new Date(ts) > new Date(current.timestamp)) {
       latest[key] = { photoUrl: photoUrl, timestamp: ts };
@@ -179,7 +185,7 @@ function getLatestPatrolPhotos_(ss) {
 
   var result = {};
   Object.keys(latest).forEach(function(k) { result[k] = latest[k].photoUrl; });
-  return result;
+  return { photos: result, lastPatrol: lastPatrol };
 }
 
 // ── 地圖用：合法吸菸區 GeoJSON（doGet action=getDesignatedZones）──
@@ -208,13 +214,14 @@ function getDesignatedZoneGeoJson(e) {
     }
 
     var coords = geocodeAddressesCached_(zones.map(function(z) { return z.address; }));
-    var latestPhotos = getLatestPatrolPhotos_(ss);
+    var patrol = getLatestPatrolPhotos_(ss);
 
     var features = [];
     zones.forEach(function(z) {
       var coord = coords[z.address];
       if (!coord) return; // 地理編碼失敗的地址跳過，不影響其他點位
       var key = z.district + '|' + z.location;
+      var last = patrol.lastPatrol[key];
       features.push({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [coord.lng, coord.lat] },
@@ -223,7 +230,10 @@ function getDesignatedZoneGeoJson(e) {
           location: z.location,
           address: z.address,
           managing_unit: z.unit,
-          photo_url: latestPhotos[key] || ''
+          // 前端依 patrol_status 區分顏色、按鈕顯示「已巡查 n／總數」
+          patrol_status: last ? '已巡查' : '未巡查',
+          last_patrol: last ? Utilities.formatDate(last, 'Asia/Taipei', 'yyyy/MM/dd HH:mm') : '',
+          photo_url: patrol.photos[key] || ''
         }
       });
     });

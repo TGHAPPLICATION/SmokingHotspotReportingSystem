@@ -201,7 +201,7 @@ function getSheetRowsJson(e) {
   // 「吸菸區巡查」分頁本身沒有座標欄位（記錄的是巡查結果，不是位置清單），
   // 地圖上這個圖層改成畫「指定吸菸區設定」I 欄地址地理編碼出來的點位，
   // 並帶入每個地點最新一筆巡查照片，交給 ZonePatrol.gs 統一處理
-  if (sheetName === ZONE_PATROL_SHEET_NAME) return getDesignatedZoneGeoJson(e);
+  if (sheetName === zonePatrolSheetName_()) return getDesignatedZoneGeoJson(e);
 
   var cfg = getConfig_();
   var ss = SpreadsheetApp.openById(cfg.SHEET_ID);

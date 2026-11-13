@@ -195,7 +195,7 @@
 
 ### 吸菸區巡查工作表（吸菸區巡查表單專用）
 
-工作表名稱固定為 `吸菸區巡查`（寫死在 `ZonePatrol.gs`），分頁不存在或缺標題列時，`getOrCreateZonePatrolSheet_()` 會自動建立／補上標題列，機制與 `環保局菸蒂回報` 相同：
+工作表名稱預設為 `指定吸菸區位置與巡查測試`，可透過 Script Properties 的 `ZONE_PATROL_SHEET_NAME` 調整（分頁改名時只改屬性即可，不需重新部署；見 `ZonePatrol.gs` 的 `zonePatrolSheetName_()`），分頁不存在或缺標題列時，`getOrCreateZonePatrolSheet_()` 會自動建立／補上標題列，機制與 `環保局菸蒂回報` 相同：
 
 | # | 欄位 | 型別 | 說明 |
 |---|------|------|------|

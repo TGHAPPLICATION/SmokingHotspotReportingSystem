@@ -23,7 +23,9 @@ function getHotspotRowsJson(e) {
   // 匯入時 Google Sheets 可能把「上傳時間」轉成日期型別，統一轉回 CSV 原本的字串格式
   var rows = values.map(function(row) {
     return row.map(function(v) {
-      return v instanceof Date ? Utilities.formatDate(v, 'Asia/Taipei', 'yyyy/MM/dd HH:mm') : String(v);
+      // 用 toString 判斷型別：部分執行環境下試算表回傳的日期 instanceof Date 會是 false
+      var isDate = Object.prototype.toString.call(v) === '[object Date]';
+      return isDate ? Utilities.formatDate(v, 'Asia/Taipei', 'yyyy/MM/dd HH:mm') : String(v);
     });
   });
 

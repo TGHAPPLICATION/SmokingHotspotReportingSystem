@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>台北市吸菸熱點地圖</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.3.2/dist/maplibre-gl.css">
+<link rel="stylesheet" href="./hotspot-report.css">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -699,7 +700,7 @@ document.getElementById('locate-btn').addEventListener('click', function() {
 
 document.getElementById('refresh-btn').addEventListener('click', function() {
   sheetLayers.forEach(function(l) {
-    if (l.visible) { l.loaded = false; loadSheetLayerData(l); }
+    if (l.visible && !l.local) { l.loaded = false; loadSheetLayerData(l); }
   });
 });
 
@@ -876,8 +877,10 @@ function updateReportButtonVisibility() {
   var canShow = activeLayers.length > 0 && activeLayers.every(function(l) {
     return l.loaded && l.canReport;
   });
-  btn.classList.toggle('hidden', !canShow);
-  if (!canShow) document.getElementById('report-panel').classList.remove('open');
+  // 吸菸熱點（CSV）報表不依賴圖層開關，資料載入後按鈕即常駐（見 hotspot-report.js）
+  var hotspotReady = !!(window.HotspotReport && window.HotspotReport.ready);
+  btn.classList.toggle('hidden', !canShow && !hotspotReady);
+  if (!canShow && !hotspotReady) document.getElementById('report-panel').classList.remove('open');
 }
 
 document.getElementById('analytics-btn').addEventListener('click', function() {
@@ -1116,5 +1119,6 @@ map.on('load', function() {
   }, 500);
 });
 </script>
+<script src="./hotspot-report.js"></script>
 </body>
 </html>

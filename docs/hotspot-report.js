@@ -88,6 +88,7 @@
     clusterLayerId: 'layer-cl-hs_hotspot',
     sc: null, visible: false, loaded: true, canReport: true,
     local: true, // 靜態 CSV，重新整理時不向 Apps Script 取資料
+    legend: STEPS.map(function (s) { return { color: s.color, label: '菸蒂 ' + s.label }; }), // 點位模式圖例
     features: []
   };
 
@@ -113,7 +114,8 @@
   function paintLayer() {
     if (map.getLayer(layer.layerId)) map.setPaintProperty(layer.layerId, 'circle-color', colorExpr());
     var lg = document.getElementById('hs-legend');
-    if (lg) lg.classList.toggle('hidden', !(layer.visible && viewMode !== 'heatmap'));
+    // 點位模式由左側面板圖例呈現，浮動圖例只在分群模式（孤立點同樣分級著色）顯示
+    if (lg) lg.classList.toggle('hidden', !(layer.visible && viewMode === 'cluster'));
   }
 
   // 篩選結果套用到地圖：替換 features → 重建分群 → 交由既有 setViewMode 重繪（分群/熱力/點位/統計）

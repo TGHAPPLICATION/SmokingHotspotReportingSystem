@@ -61,13 +61,28 @@
   function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 
   // 「2026/10/19 06:18」→ Date；「25.05，121.55」（全形或半形逗號）→ [lng, lat]
+  // 上傳時間可能有多種格式（Google Sheets 會把匯入的文字轉成日期型別）：
+  //   1. 「2026/10/19 06:18」「2026-10-19 6:18:00」→ 視為台北當地時間
+  //   2. 試算表日期序號（1899-12-30 起算的天數，如 46314.2625）
+  //   3. 其他可被 Date 解析的字串（如「Mon Oct 19 2026 06:18:00 GMT+0800」、ISO 8601）
+  function parseTime(v) {
+    v = String(v || '').trim();
+    var t = /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})[\sT]+(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(v);
+    if (t) return new Date(+t[1], +t[2] - 1, +t[3], +t[4], +t[5]);
+    if (/^\d+(\.\d+)?$/.test(v) && +v > 20000 && +v < 80000) {
+      var u = new Date(Math.round((+v - 25569) * 864e5)); // 25569 = 1970-01-01 的序號；序號為當地牆上時間，用 UTC 欄位取回
+      return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes());
+    }
+    var d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
   function toRecord(r) {
-    var t = /^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/.exec(r['上傳時間'] || '');
-    var c = (r['座標'] || '').split(/[，,]/).map(parseFloat);
-    if (!t || c.length !== 2 || isNaN(c[0]) || isNaN(c[1])) return null;
+    var d = parseTime(r['上傳時間']);
+    var c = String(r['座標'] || '').split(/[，,]/).map(parseFloat);
+    if (!d || c.length !== 2 || isNaN(c[0]) || isNaN(c[1])) return null;
     var lat = c[0], lng = c[1];
     if (lat > 100) { var tmp = lat; lat = lng; lng = tmp; } // 容錯：經緯度順序顛倒
-    var d = new Date(+t[1], +t[2] - 1, +t[3], +t[4], +t[5]);
     return {
       date: d, day: ymd(d), hour: d.getHours(),
       time: r['上傳時間'], district: r['行政區'] || '未填', unit: r['單位'],
@@ -444,6 +459,7 @@
   ])
     .then(function (res) {
       state.rows = res[0].map(toRecord).filter(Boolean);
+      if (!state.rows.length && res[0].length) console.warn('[hotspot] 無法解析的資料範例（請確認欄位名稱與格式）：', res[0].slice(0, 3));
       correctDistricts(state.rows, res[1]);
       if (!state.rows.length) throw new Error('「吸菸熱點」分頁無有效資料');
       var days = state.rows.map(function (r) { return r.day; }).sort();

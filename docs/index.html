@@ -584,8 +584,9 @@ function updateSheetStats() {
       var s = parseInt(f.properties && f.properties.time_slot);
       if (s >= 0 && s < 12) counts[s]++;
     });
-    var peak = counts.indexOf(Math.max.apply(null, counts));
-    document.getElementById('stat-peak').textContent = SLOT_LABELS[peak] || '—';
+    var max = Math.max.apply(null, counts);
+    // 圖層沒有任何時段資料（如吸菸區巡查的地點清單）時顯示「—」，避免誤顯示 00–02
+    document.getElementById('stat-peak').textContent = max > 0 ? SLOT_LABELS[counts.indexOf(max)] : '—';
   } else {
     document.getElementById('stat-peak').textContent = '—';
   }
